@@ -81,11 +81,24 @@ export class GameAudio {
     // ---------- MUSIC ----------
     this.musicG = ctx.createGain(); this.musicG.gain.value = this.musicOn ? 0.28 : 0;
     this.musicG.connect(this.master);
-    if (musicBuffer) {
-      ctx.decodeAudioData(musicBuffer).then(buf => {
-        const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(this.musicG); s.start();
-      }).catch(() => {});
-    }
+    // Music is fetched in the background so it must be possible to attach it
+    // after Start Race was pressed.
+    if (musicBuffer) this.setMusicBuffer(musicBuffer);
+  }
+
+  setMusicBuffer(musicBuffer) {
+    if (!this.ctx || !this.musicG || !musicBuffer || this.musicLoading || this.musicSource) return;
+    this.musicLoading = true;
+    this.ctx.decodeAudioData(musicBuffer.slice(0)).then(buf => {
+      const source = this.ctx.createBufferSource();
+      source.buffer = buf;
+      source.loop = true;
+      source.connect(this.musicG);
+      source.start();
+      this.musicSource = source;
+    }).catch(() => {
+      // Audio is a bonus; a bad/blocked music file must not affect gameplay.
+    }).finally(() => { this.musicLoading = false; });
   }
 
   _noise(sec) {
