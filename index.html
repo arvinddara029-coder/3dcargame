@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Highway Rush 3D — Endless Racing</title>
+<link rel="stylesheet" href="css/style.css" />
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="stat"><span class="lbl">SCORE</span><span id="score">0</span></div>
+    <div class="stat"><span class="lbl">DISTANCE</span><span id="dist">0.0 km</span></div>
+    <div class="stat"><span class="lbl">MULTIPLIER</span><span id="mult">x1</span></div>
+    <div class="stat"><span class="lbl">BEST</span><span id="best">0</span></div>
+  </div>
+  <div id="bars">
+    <div class="barwrap"><span class="lbl">HEALTH</span><div class="bar"><div id="healthbar"></div></div></div>
+    <div class="barwrap"><span class="lbl">NITRO</span><div class="bar"><div id="nitrobar"></div></div></div>
+  </div>
+  <canvas id="minimap" width="180" height="240"></canvas>
+  <canvas id="gauge" width="260" height="260"></canvas>
+  <div id="popups"></div>
+  <div id="warning" class="hidden">WRONG WAY!</div>
+  <div id="help">W/↑ Gas · S/↓ Brake · A/D Steer · SPACE Handbrake · SHIFT Nitro · H Horn · C Camera · M Music · P Pause</div>
+</div>
+
+<!-- Touch controls -->
+<div id="touch" class="hidden">
+  <div class="tleft"><button data-k="left">◀</button><button data-k="right">▶</button></div>
+  <div class="tright"><button data-k="nitro" class="n">N₂O</button><button data-k="brake" class="b">BRAKE</button><button data-k="gas" class="g">GAS</button></div>
+</div>
+
+<!-- Menus -->
+<div id="loading" class="screen"><h1>HIGHWAY RUSH 3D</h1><div class="loadbar"><div id="loadfill"></div></div><p id="loadtxt">Loading assets…</p></div>
+
+<div id="menu" class="screen hidden">
+  <h1>HIGHWAY RUSH <span>3D</span></h1>
+  <p class="sub">Endless highway · Oncoming traffic · Roadworks · Nitro</p>
+  <div class="colors" id="colors"></div>
+  <div class="diff">
+    <button data-d="0">EASY</button><button data-d="1" class="sel">NORMAL</button><button data-d="2">INSANE</button>
+  </div>
+  <button id="startBtn" class="big">START RACE</button>
+  <div class="keys">
+    <div><b>W / ↑</b> Accelerate</div><div><b>S / ↓</b> Brake / Reverse</div>
+    <div><b>A D / ← →</b> Steer</div><div><b>SPACE</b> Handbrake drift</div>
+    <div><b>SHIFT</b> Nitro boost</div><div><b>H</b> Horn</div>
+    <div><b>C</b> Change camera</div><div><b>M</b> Music on/off</div>
+  </div>
+  <p class="tip">Tip: Oncoming lane (left side) me drive karne par 2x points! Near miss = bonus.</p>
+</div>
+
+<div id="pause" class="screen hidden"><h1>PAUSED</h1><button id="resumeBtn" class="big">RESUME</button><button id="quitBtn">MAIN MENU</button></div>
+
+<div id="over" class="screen hidden">
+  <h1 class="red">WRECKED!</h1>
+  <div class="final">
+    <div><span>Score</span><b id="fScore">0</b></div>
+    <div><span>Distance</span><b id="fDist">0</b></div>
+    <div><span>Top Speed</span><b id="fTop">0</b></div>
+    <div><span>Near Misses</span><b id="fNear">0</b></div>
+  </div>
+  <p id="newbest" class="hidden">★ NEW BEST SCORE ★</p>
+  <button id="againBtn" class="big">RACE AGAIN</button><button id="menuBtn">MAIN MENU</button>
+</div>
+
+<div id="flash"></div>
+<script type="module" src="js/game.js"></script>
+</body>
+</html>
