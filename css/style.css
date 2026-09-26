@@ -15,7 +15,7 @@ button.big{font-size:22px;padding:14px 48px;background:linear-gradient(90deg,#ff
 .keys{display:grid;grid-template-columns:repeat(2,minmax(160px,1fr));gap:6px 30px;font-size:13px;opacity:.85;text-align:left}
 .keys b{color:#ffd23f;display:inline-block;min-width:90px}
 .tip{font-size:13px;color:#00e5ff}
-.loadbar{width:min(420px,80vw);height:10px;background:#222;border-radius:5px;overflow:hidden}#loadfill{height:100%;width:0;background:linear-gradient(90deg,#ff6a00,#ffd23f);transition:width .2s}
+.loadbar{width:min(420px,80vw);height:10px;background:#222;border-radius:5px;overflow:hidden;box-shadow:0 0 18px rgba(255,150,0,.18)}#loadfill{height:100%;width:0;background:linear-gradient(90deg,#ff6a00,#ffd23f,#fff0a3);transition:width .2s}.loadnote{max-width:330px;font-size:12px;line-height:1.5;opacity:.62}#loadingRetry{margin-top:4px}
 .final{display:grid;grid-template-columns:repeat(2,160px);gap:12px}.final div{background:rgba(255,255,255,.07);padding:12px;border-radius:8px}.final span{display:block;font-size:12px;opacity:.7;letter-spacing:2px;text-transform:uppercase}.final b{font-size:26px}
 #newbest{color:#ffd23f;font-weight:900;letter-spacing:3px;animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.4}}

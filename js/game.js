@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GameAudio } from './audio.js';
 
@@ -39,14 +37,27 @@ const CAR_COLORS = ['#c50000', '#ffb300', '#0055ff', '#111111', '#f4f4f4', '#00b
 //  RENDERER / SCENE
 // =====================================================================
 const container = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-container.appendChild(renderer.domElement);
+const LOW_POWER_DEVICE = Boolean(matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4));
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: !LOW_POWER_DEVICE, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOW_POWER_DEVICE ? 1 : 1.5));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.9;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+} catch (error) {
+  // Do not leave a broken device on an endless “Loading assets” screen.
+  console.error('WebGL is unavailable:', error);
+  document.getElementById('loadtxt').textContent = 'This browser needs WebGL to run the 3D race.';
+  document.getElementById('loadfill').style.width = '100%';
+  const retry = document.getElementById('loadingRetry');
+  retry.classList.remove('hidden');
+  retry.onclick = () => location.reload();
+  throw error;
+}
 
 const scene = new THREE.Scene();
 const FOG_COLOR = new THREE.Color('#e9b98f');
@@ -77,7 +88,7 @@ const hemi = new THREE.HemisphereLight('#ffe6cc', '#3a5a2a', 0.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight('#ffd9a8', 2.6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(LOW_POWER_DEVICE ? 1024 : 2048, LOW_POWER_DEVICE ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 250 });
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
@@ -113,63 +124,252 @@ function roadTexture() {
 }
 
 // =====================================================================
-//  LOADING
+//  FAST, FAIL-SAFE BOOT
+//  The game never waits on an optional model, HDR, texture, or music download.
+//  This is important on mobile networks and on hosts that block Draco workers.
 // =====================================================================
-const loadingMgr = new THREE.LoadingManager();
 const loadFill = document.getElementById('loadfill');
-loadingMgr.onProgress = (u, l, t) => { loadFill.style.width = (l / t) * 100 + '%'; };
-const draco = new DRACOLoader(loadingMgr).setDecoderPath('lib/addons/libs/draco/gltf/');
-const gltfLoader = new GLTFLoader(loadingMgr).setDRACOLoader(draco);
-const texLoader = new THREE.TextureLoader(loadingMgr);
+const loadText = document.getElementById('loadtxt');
+const loadingScreen = document.getElementById('loading');
+const loadingRetry = document.getElementById('loadingRetry');
+const texLoader = new THREE.TextureLoader();
 
-let carGLTF, grassTex, aoTex, musicData = null;
+let grassTex, aoTex, musicData = null;
 const audio = new GameAudio();
 
-Promise.all([
-  gltfLoader.loadAsync('assets/models/ferrari.glb'),
-  texLoader.loadAsync('assets/grass.jpg'),
-  texLoader.loadAsync('assets/models/ferrari_ao.png'),
-  new RGBELoader(loadingMgr).loadAsync('assets/sky.hdr'),
-  fetch('assets/sounds/music.mp3').then(r => r.arrayBuffer()).catch(() => null),
-]).then(([gltf, grass, ao, hdr, music]) => {
-  carGLTF = gltf; grassTex = grass; aoTex = ao; musicData = music;
-  hdr.mapping = THREE.EquirectangularReflectionMapping;
-  scene.environment = hdr;
-  grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
-  grassTex.colorSpace = THREE.SRGBColorSpace;
-  grassTex.anisotropy = 8;
-  buildWorld();
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('menu').classList.remove('hidden');
-  state = 'menu';
-}).catch(e => { document.getElementById('loadtxt').textContent = 'Load error: ' + e.message; console.error(e); });
+function setLoading(message, percent) {
+  loadText.textContent = message;
+  loadFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+function configureGrass(texture) {
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+}
+
+function makeFallbackGrassTexture() {
+  const size = 192;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(size, size);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 30;
+    image.data[i] = 83 + n;
+    image.data[i + 1] = 122 + n;
+    image.data[i + 2] = 54 + n * 0.45;
+    image.data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  ctx.globalAlpha = 0.22;
+  for (let i = 0; i < 520; i++) {
+    ctx.fillStyle = i % 2 ? '#d0b56a' : '#1e5628';
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1, 3 + Math.random() * 5);
+  }
+  return configureGrass(new THREE.CanvasTexture(canvas));
+}
+
+function makeFallbackShadowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gradient.addColorStop(0, 'rgba(0,0,0,0.60)');
+  gradient.addColorStop(0.55, 'rgba(0,0,0,0.28)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function optionalAssetError(name, error) {
+  // Optional assets improve polish only — never strand the player on the loader.
+  console.warn(`Optional ${name} skipped:`, error?.message || error);
+}
+
+function loadOptionalAssets() {
+  texLoader.load('assets/grass.jpg', texture => {
+    grassTex = configureGrass(texture);
+    if (grassMat) {
+      grassMat.map = grassTex;
+      grassMat.needsUpdate = true;
+    }
+  }, undefined, error => optionalAssetError('grass texture', error));
+
+  new RGBELoader().load('assets/sky.hdr', hdr => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = hdr;
+  }, undefined, error => optionalAssetError('environment map', error));
+
+  // Music never blocks the race. Abort it after a while when the browser supports it.
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 9000) : null;
+  fetch('assets/sounds/music.mp3', controller ? { signal: controller.signal } : undefined)
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.arrayBuffer();
+    })
+    .then(buffer => {
+      musicData = buffer;
+      // If the player pressed Start while the music was downloading, add it now.
+      if (audio.ctx) audio.setMusicBuffer(buffer);
+    })
+    .catch(error => {
+      if (error.name !== 'AbortError') optionalAssetError('music', error);
+    })
+    .then(() => { if (timer) clearTimeout(timer); });
+}
+
+function showBootError(error) {
+  console.error('Highway Rush boot error:', error);
+  setLoading('3D engine could not start. Please retry.', 100);
+  loadingRetry.classList.remove('hidden');
+  loadingRetry.onclick = () => location.reload();
+}
+
+function bootGame() {
+  try {
+    setLoading('Generating the highway…', 18);
+    // These compact procedural assets are ready immediately. The downloaded
+    // versions above replace them later when available.
+    grassTex = makeFallbackGrassTexture();
+    aoTex = makeFallbackShadowTexture();
+    setLoading('Placing traffic and scenery…', 58);
+    buildWorld();
+    setLoading('Race ready!', 100);
+    loadOptionalAssets();
+
+    // Give the completed bar one frame, then always show the playable menu.
+    requestAnimationFrame(() => {
+      state = 'menu';
+      setTimeout(() => {
+        loadingScreen.classList.add('hidden');
+        document.getElementById('menu').classList.remove('hidden');
+      }, 180);
+    });
+  } catch (error) {
+    showBootError(error);
+  }
+}
+
+// Run after module initialization so all game-state variables exist first.
+Promise.resolve().then(bootGame);
 
 // =====================================================================
 //  MATERIALS
 // =====================================================================
 let roadMat, grassMat, railMat, postMat;
-const bodyMats = [];
+
+// The original high-poly Draco car was beautiful but made startup dependent on
+// a Web Worker and pushed every traffic car through hundreds of thousands of
+// vertices. This shared-geometry supercar is intentionally lightweight, while
+// still giving the player a detailed, fully 3D vehicle on every device.
+let proceduralCarAssets;
+function getProceduralCarAssets() {
+  if (proceduralCarAssets) return proceduralCarAssets;
+
+  const tireGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.34, 16);
+  tireGeo.rotateZ(Math.PI / 2);
+  const rimGeo = new THREE.CylinderGeometry(0.30, 0.30, 0.355, 14);
+  rimGeo.rotateZ(Math.PI / 2);
+  const rotorGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.365, 14);
+  rotorGeo.rotateZ(Math.PI / 2);
+  const wheelRingGeo = new THREE.TorusGeometry(0.29, 0.035, 6, 14);
+  wheelRingGeo.rotateY(Math.PI / 2);
+
+  proceduralCarAssets = {
+    bodyGeo: new THREE.BoxGeometry(1.98, 0.46, 4.24),
+    hoodGeo: new THREE.SphereGeometry(1, 18, 10),
+    cabinGeo: new THREE.SphereGeometry(1, 18, 10),
+    bumperGeo: new THREE.BoxGeometry(1.92, 0.24, 0.22),
+    grilleGeo: new THREE.BoxGeometry(0.92, 0.20, 0.035),
+    lampGeo: new THREE.BoxGeometry(0.46, 0.14, 0.045),
+    sideGeo: new THREE.BoxGeometry(0.08, 0.15, 2.60),
+    spoilerGeo: new THREE.BoxGeometry(1.42, 0.07, 0.24),
+    spoilerPostGeo: new THREE.BoxGeometry(0.07, 0.34, 0.07),
+    tireGeo, rimGeo, rotorGeo, wheelRingGeo,
+    shadowGeo: new THREE.PlaneGeometry(3.45, 5.2),
+    tireMat: new THREE.MeshStandardMaterial({ color: 0x08090b, roughness: 0.86, metalness: 0.03 }),
+    rimMat: new THREE.MeshStandardMaterial({ color: 0xd7e1e5, roughness: 0.22, metalness: 1.0 }),
+    rotorMat: new THREE.MeshStandardMaterial({ color: 0x43494e, roughness: 0.35, metalness: 0.92 }),
+    trimMat: new THREE.MeshStandardMaterial({ color: 0x15191c, roughness: 0.32, metalness: 0.8 }),
+    glassMat: new THREE.MeshStandardMaterial({ color: 0x07131e, roughness: 0.06, metalness: 0.82, transparent: true, opacity: 0.78 }),
+    headlampMat: new THREE.MeshBasicMaterial({ color: 0xfff2b8 }),
+    shadowMat: new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, opacity: 0.72, depthWrite: false, toneMapped: false }),
+  };
+  return proceduralCarAssets;
+}
+
+function carPart(root, geometry, material, x, y, z, scale = null) {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  root.add(mesh);
+  return mesh;
+}
+
 function makeCar(color, isPlayer = false) {
+  const a = getProceduralCarAssets();
   const root = new THREE.Group();
-  const model = carGLTF.scene.clone(true);
-  model.rotation.y = Math.PI; // model faces -Z, game forward is +Z
-  root.add(model);
-  const bodyMat = new THREE.MeshPhysicalMaterial({ color, metalness: 1.0, roughness: 0.45, clearcoat: 1.0, clearcoatRoughness: 0.03 });
-  const detailsMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1.0, roughness: 0.4 });
-  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, metalness: 0.25, roughness: 0, transmission: isPlayer ? 1.0 : 0, opacity: 0.7, transparent: !isPlayer });
-  model.getObjectByName('body').material = bodyMat;
-  ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl', 'trim'].forEach(n => { const o = model.getObjectByName(n); if (o) o.material = detailsMat; });
-  model.getObjectByName('glass').material = glassMat;
-  model.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
-  const wheels = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'].map(n => { const w = model.getObjectByName(n); w.rotation.order = 'YXZ'; return w; });
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.655 * 4, 1.3 * 4),
-    new THREE.MeshBasicMaterial({ map: aoTex, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; shadow.renderOrder = 2;
-  root.add(shadow);
-  // brake lights
+  const bodyMat = new THREE.MeshPhysicalMaterial({
+    color, metalness: 0.88, roughness: 0.24, clearcoat: 1.0, clearcoatRoughness: 0.08,
+  });
   const brakeMat = new THREE.MeshBasicMaterial({ color: 0x440000 });
-  [-0.62, 0.62].forEach(x => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.04), brakeMat); b.position.set(x, 0.78, -2.28); root.add(b); });
-  bodyMats.push(bodyMat);
+
+  // Low, wide body, sculpted hood and smoked glass canopy — front is +Z.
+  carPart(root, a.bodyGeo, bodyMat, 0, 0.70, 0);
+  carPart(root, a.hoodGeo, bodyMat, 0, 0.88, 1.12, [0.94, 0.30, 1.10]);
+  carPart(root, a.cabinGeo, a.glassMat, 0, 1.16, -0.32, [0.82, 0.48, 1.05]);
+  carPart(root, a.bumperGeo, a.trimMat, 0, 0.48, 2.18);
+  carPart(root, a.bumperGeo, a.trimMat, 0, 0.50, -2.18);
+  carPart(root, a.grilleGeo, a.trimMat, 0, 0.66, 2.30);
+  carPart(root, a.sideGeo, a.trimMat, -1.00, 0.48, -0.03);
+  carPart(root, a.sideGeo, a.trimMat, 1.00, 0.48, -0.03);
+
+  // Headlights and independent tail/brake lights.
+  for (const x of [-0.62, 0.62]) {
+    carPart(root, a.lampGeo, a.headlampMat, x, 0.84, 2.20);
+    carPart(root, a.lampGeo, brakeMat, x, 0.82, -2.20);
+  }
+  carPart(root, a.spoilerGeo, a.trimMat, 0, 1.33, -1.78);
+  for (const x of [-0.52, 0.52]) carPart(root, a.spoilerPostGeo, a.trimMat, x, 1.15, -1.78);
+
+  const wheels = [];
+  const addWheel = (x, z) => {
+    const wheel = new THREE.Group();
+    wheel.position.set(x, 0.49, z);
+    wheel.rotation.order = 'YXZ';
+    carPart(wheel, a.tireGeo, a.tireMat, 0, 0, 0);
+    carPart(wheel, a.rotorGeo, a.rotorMat, 0, 0, 0);
+    carPart(wheel, a.rimGeo, a.rimMat, 0, 0, 0);
+    carPart(wheel, a.wheelRingGeo, a.trimMat, x > 0 ? 0.19 : -0.19, 0, 0);
+    root.add(wheel);
+    wheels.push(wheel);
+  };
+  // First two wheels are the steering axle, matching updatePlayer/updateTraffic.
+  addWheel(-1.04, 1.38); addWheel(1.04, 1.38);
+  addWheel(-1.04, -1.38); addWheel(1.04, -1.38);
+
+  const shadow = new THREE.Mesh(a.shadowGeo, a.shadowMat);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.018;
+  shadow.renderOrder = 1;
+  root.add(shadow);
+
+  // A very subtle player-only underglow makes the selected car easy to follow.
+  if (isPlayer) {
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 3.25), new THREE.MeshBasicMaterial({
+      color: 0x149dff, transparent: true, opacity: 0.10, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.028;
+    root.add(glow);
+  }
+
   return { root, wheels, bodyMat, brakeMat, halfL: 2.3, halfW: 1.0 };
 }
 
@@ -216,7 +416,7 @@ function buildWorld() {
   postMat = new THREE.MeshStandardMaterial({ color: '#777', metalness: 0.6, roughness: 0.5 });
 
   // Trees (instanced, recycled)
-  const TREES = 700;
+  const TREES = LOW_POWER_DEVICE ? 420 : 700;
   const trunkG = new THREE.CylinderGeometry(0.25, 0.35, 3, 6); trunkG.translate(0, 1.5, 0);
   const topG = new THREE.ConeGeometry(2.2, 6, 8); topG.translate(0, 5.5, 0);
   treeTrunks = new THREE.InstancedMesh(trunkG, new THREE.MeshStandardMaterial({ color: '#5a3b22', roughness: 1 }), TREES);
@@ -906,7 +1106,7 @@ function loop() {
     updateCamera(dt);
     drawHUD();
     audio.update({ active: true, rpm: player.rpm, throttle: player.throttle, speed: Math.abs(player.v), skid: player.skid, scrape: player.scrape, nitro: player.nitroOn, horn: !!keys.KeyH && !S.over });
-  } else if (state === 'menu' && carGLTF) {
+  } else if (state === 'menu') {
     // showroom orbit
     if (!player) resetGame();
     menuT += dt;
