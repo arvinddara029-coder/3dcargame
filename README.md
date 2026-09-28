@@ -12,6 +12,17 @@ Endless 3D highway racing game (Three.js, browser me chalta hai).
 - HUD: speedometer/tachometer, gear, minimap, health & nitro bars, best score saved
 - 3 difficulties, touch controls for mobile
 - Fail-safe startup: procedural road/car assets launch immediately; grass, HDR lighting and music enhance the race in the background when available
+- CrazyGames SDK integration (ads only): interstitials between completed runs + optional rewarded "second chance" revive
+
+## CrazyGames integration (ads only)
+
+`js/ads.js` (`CrazyGamesAdManager`) wraps the official CrazyGames HTML5 SDK (v3, loaded once in `index.html`). It is used **only for advertising** — no accounts, cloud saves, leaderboards, or purchases.
+
+- Interstitials (`midgame`) fire only at natural breaks: after a run ends, when starting the next race — never during driving, never at first launch (60s session grace + CrazyGames' ~3-minute ad cooldown is honoured client-side too)
+- Rewarded ads power the optional **WATCH AD · SECOND CHANCE** revive on the game-over screen (once per run). The reward is granted strictly in the SDK's `adFinished` callback — skipping/failing the ad grants nothing
+- Game audio is muted in `adStarted` and restored in `adFinished`/`adError`, per CrazyGames requirements; `gameplayStart()`/`gameplayStop()` bracket active gameplay
+- Every SDK call is guarded: if the script is blocked, the CDN is unreachable, or `SDK.init()` fails, the game runs exactly as before with ads disabled (adblock users never see the revive button)
+
 
 ## Run
 ```

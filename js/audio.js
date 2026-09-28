@@ -200,6 +200,14 @@ export class GameAudio {
     this.musicOn = !this.musicOn;
     if (this.musicG) this._set(this.musicG.gain, this.musicOn ? 0.28 : 0, 0.2);
   }
+
+  // Ducks the entire mix on the master bus while an ad is playing and
+  // restores it afterwards (a CrazyGames requirement: no game audio during ads).
+  setMuted(muted) {
+    this.adMuted = muted;
+    if (!this.ctx || !this.master) return;
+    this._set(this.master.gain, muted ? 0 : 0.8, 0.03);
+  }
   suspend() { this.ctx && this.ctx.suspend(); }
   resume() { this.ctx && this.ctx.resume(); }
 }

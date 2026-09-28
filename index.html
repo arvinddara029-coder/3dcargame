@@ -74,10 +74,14 @@
     <div><span>Near Misses</span><b id="fNear">0</b></div>
   </div>
   <p id="newbest" class="hidden">★ NEW BEST SCORE ★</p>
+  <button id="reviveBtn" class="hidden">WATCH AD · SECOND CHANCE</button>
   <button id="againBtn" class="big">RACE AGAIN</button><button id="menuBtn">MAIN MENU</button>
 </div>
 
 <div id="flash"></div>
+<!-- CrazyGames SDK (used for ads only). Loaded once, before the game code.
+     The game boots and runs normally even when this script is blocked. -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
 <script type="module" src="js/game.js"></script>
 </body>
 </html>

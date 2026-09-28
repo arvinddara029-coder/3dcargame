@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GameAudio } from './audio.js';
+import { ads } from './ads.js';
 
 // =====================================================================
 //  CONSTANTS / ROAD MATH
@@ -139,6 +140,11 @@ const texLoader = new THREE.TextureLoader();
 
 let grassTex, aoTex, musicData = null;
 const audio = new GameAudio();
+
+// CrazyGames ads (ads.js): start initializing in the background — the game
+// never waits for the SDK and runs exactly as before when it is unavailable.
+ads.setAudioHooks(() => audio.setMuted(true), () => audio.setMuted(false));
+ads.init();
 
 function setLoading(message, percent) {
   loadText.textContent = message;
@@ -639,7 +645,7 @@ function resetGame() {
   player = makeCar(playerColor, true);
   scene.add(player.root);
   Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2 });
-  Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, over: false, overTimer: 0 });
+  Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, over: false, overTimer: 0, runEnded: false, revived: false });
   gameTime = 0;
   shake = 0;
   treeData.forEach(t => t.z = -1e9); lampData.forEach(l => l.z = -1e9);
@@ -1057,6 +1063,13 @@ function startGame() {
   // A menu button that was clicked keeps focus; pressing Enter afterwards would
   // natively re-click the hidden button and silently restart the race.
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  // Interstitial only at a natural break (between completed runs). The manager
+  // skips the ad when unavailable/cooldown and always calls back — the race
+  // must start regardless of the ad outcome.
+  ads.maybeShowInterstitial(beginRace);
+}
+
+function beginRace() {
   audio.init(musicData); audio.resume();
   resetGame();
   updateCamera(0.016, true);
@@ -1064,10 +1077,15 @@ function startGame() {
   el('hud').classList.remove('hidden');
   if (matchMedia('(pointer: coarse)').matches) el('touch').classList.remove('hidden');
   state = 'play';
+  S.runEnded = false;
+  ads.gameplayStart();
   popup('GO!', '#3bff7a');
 }
+
 function endGame() {
-  S.over = true; S.overTimer = 2.2;
+  S.over = true; S.overTimer = 2.2; S.runEnded = true;
+  ads.markRunEnded();
+  ads.gameplayStop();
   popup('WRECKED', '#ff3b3b');
 }
 function showGameOver() {
@@ -1077,14 +1095,38 @@ function showGameOver() {
   el('fScore').textContent = sc.toLocaleString(); el('fDist').textContent = (S.dist / 1000).toFixed(2) + ' km';
   el('fTop').textContent = Math.round(S.top * KMH) + ' km/h'; el('fNear').textContent = S.near;
   el('newbest').classList.toggle('hidden', !nb);
+  // Rewarded "second chance": offered once per run, only when the ad system
+  // is actually able to deliver (SDK ready, no adblock).
+  el('reviveBtn').classList.toggle('hidden', S.revived || !ads.canOfferRewarded());
+  el('reviveBtn').disabled = false;
   el('over').classList.remove('hidden'); el('touch').classList.add('hidden');
 }
+
+// Granted ONLY from the rewarded ad's adFinished callback (see ads.js).
+function revivePlayer() {
+  const p = player;
+  S.over = false; S.overTimer = 0;
+  p.health = Math.max(p.health, 55);
+  p.nitro = Math.max(p.nitro, 50);
+  p.invuln = 3; p.spin = 0; p.skid = 0; p.scrape = 0;
+  p.v = Math.min(p.v, 6);
+  p.heading = Math.atan(roadDX(p.z));
+  // Fair second chance: clear the traffic right around the player.
+  for (const t of traffic) if (Math.abs(t.z - p.z) < 50) t.dead = true;
+  el('over').classList.add('hidden');
+  state = 'play';
+  shake = 0;
+  updateCamera(0.016, true);
+  ads.gameplayStart();
+  audio.resume();
+  popup('SECOND CHANCE!', '#3bff7a');
+}
 function togglePause() {
-  if (state === 'play') { state = 'pause'; el('pause').classList.remove('hidden'); audio.suspend(); }
-  else if (state === 'pause') { state = 'play'; el('pause').classList.add('hidden'); audio.resume(); }
+  if (state === 'play') { state = 'pause'; el('pause').classList.remove('hidden'); audio.suspend(); ads.gameplayStop(); }
+  else if (state === 'pause') { state = 'play'; el('pause').classList.add('hidden'); audio.resume(); ads.gameplayStart(); }
 }
 function toMenu() {
-  state = 'menu'; audio.suspend();
+  state = 'menu'; audio.suspend(); ads.gameplayStop();
   ['over', 'pause', 'hud', 'touch'].forEach(s => el(s).classList.add('hidden'));
   el('menu').classList.remove('hidden');
 }
@@ -1099,6 +1141,20 @@ CAR_COLORS.forEach((c, i) => {
 document.querySelectorAll('.diff button').forEach(b => b.onclick = () => { difficulty = +b.dataset.d; document.querySelectorAll('.diff button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
 el('startBtn').onclick = startGame; el('againBtn').onclick = startGame;
 el('resumeBtn').onclick = togglePause; el('quitBtn').onclick = toMenu; el('menuBtn').onclick = toMenu;
+// Rewarded "second chance": revive only after the ad completes (ads.js calls
+// onReward exclusively from adFinished). Closing/failing the ad grants nothing.
+el('reviveBtn').onclick = () => {
+  if (S.revived || !ads.canOfferRewarded()) return;
+  el('reviveBtn').disabled = true;
+  ads.requestRewarded({
+    onReward: () => revivePlayer(),
+    onDone: (ok) => {
+      el('reviveBtn').classList.add('hidden');
+      S.revived = true;
+      if (!ok) popup('AD NOT AVAILABLE', '#ff8c00');
+    },
+  });
+};
 
 addEventListener('keydown', e => {
   keys[e.code] = true;
