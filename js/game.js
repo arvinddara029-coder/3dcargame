@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GameAudio } from './audio.js';
+import { loadWorldTextures, loadPlayerCar, gantrySignTexture } from './assets.js';
+import { makeTrafficVehicle } from './fleet.js';
+import { initScenery } from './scenery.js';
 import { ads } from './ads.js';
 
 // =====================================================================
@@ -194,6 +197,16 @@ function makeFallbackShadowTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
+function applyWorldTexture(name, t) {
+  // Baked PBR maps replace the procedural placeholders as they arrive.
+  if (name === 'roadAlbedo') { roadMat.map = t; roadMat.needsUpdate = true; }
+  else if (name === 'roadNormal') { roadMat.normalMap = t; roadMat.normalScale.set(0.9, 0.9); roadMat.needsUpdate = true; }
+  else if (name === 'roadRough') { roadMat.roughnessMap = t; roadMat.roughness = 1; roadMat.needsUpdate = true; }
+  else if (name === 'concreteAlbedo') { t.repeat.set(0.5, 0.5); for (const m of [concreteMat, soundMat]) { m.map = t; m.needsUpdate = true; } }
+  else if (name === 'concreteNormal') { t.repeat.set(0.5, 0.5); for (const m of [concreteMat, soundMat]) { m.normalMap = t; m.normalScale.set(0.6, 0.6); m.needsUpdate = true; } }
+  else if (name === 'grassNormal') { grassMat.normalMap = t; grassMat.normalScale.set(0.7, 0.7); grassMat.needsUpdate = true; }
+}
+
 function optionalAssetError(name, error) {
   // Optional assets improve polish only — never strand the player on the loader.
   console.warn(`Optional ${name} skipped:`, error?.message || error);
@@ -208,6 +221,11 @@ function loadOptionalAssets() {
         grassMat.needsUpdate = true;
       }
     }, undefined, error => optionalAssetError('grass texture', error));
+
+    loadWorldTextures(renderer, applyWorldTexture);
+    // The detailed car is a ~5 MB download — skip it on low-power/mobile
+    // devices, which keep the lightweight procedural body.
+    if (!LOW_POWER_DEVICE) loadPlayerCar().then(rig => { if (rig) adoptPlayerCar(rig); });
 
     new RGBELoader().load('assets/sky.hdr', hdr => {
       hdr.mapping = THREE.EquirectangularReflectionMapping;
@@ -275,7 +293,8 @@ Promise.resolve().then(bootGame);
 // =====================================================================
 //  MATERIALS
 // =====================================================================
-let roadMat, grassMat, railMat, postMat;
+let roadMat, grassMat, railMat, postMat, concreteMat, soundMat, reflectMat;
+let scenery = null;
 
 // The original high-poly Draco car was beautiful but made startup dependent on
 // a Web Worker and pushed every traffic car through hundreds of thousands of
@@ -388,41 +407,52 @@ function makeCar(color, isPlayer = false) {
   return { root, wheels, bodyMat, brakeMat, halfL: 2.3, halfW: 1.0 };
 }
 
-function makeTruck() {
-  const root = new THREE.Group();
-  const cols = ['#e8e8e8', '#1c5fa8', '#c0392b', '#e6a100', '#2e7d32', '#6d4c41'];
-  const cargoMat = new THREE.MeshStandardMaterial({ color: cols[(Math.random() * cols.length) | 0], roughness: 0.6, metalness: 0.2 });
-  const cabMat = new THREE.MeshStandardMaterial({ color: cols[(Math.random() * cols.length) | 0], roughness: 0.3, metalness: 0.6 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.8 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x0a1a2a, roughness: 0.05, metalness: 0.9 });
-  const isBus = Math.random() < 0.35;
-  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; root.add(m); return m; };
-  if (isBus) {
-    add(new THREE.BoxGeometry(2.5, 2.8, 11), cabMat, 0, 1.9, 0);
-    add(new THREE.BoxGeometry(2.52, 0.9, 10.2), glass, 0, 2.5, -0.2);
-    add(new THREE.BoxGeometry(2.3, 1.2, 0.05), glass, 0, 2.4, 5.51);
-  } else {
-    add(new THREE.BoxGeometry(2.5, 3.0, 7.2), cargoMat, 0, 2.3, -1.6);
-    add(new THREE.BoxGeometry(2.4, 2.4, 2.4), cabMat, 0, 1.9, 3.3);
-    add(new THREE.BoxGeometry(2.2, 1.0, 0.05), glass, 0, 2.5, 4.52);
-    add(new THREE.BoxGeometry(2.3, 0.3, 11), dark, 0, 0.7, 0);
+let playerCarRig = null;
+function wrapProc(car) {
+  car.glb = false;
+  car.setBodyColor = c => car.bodyMat.color.set(c);
+  car.setBrake = on => car.brakeMat.color.setHex(on ? 0xff1010 : 0x440000);
+  car.setHead = () => {};
+  return car;
+}
+function wrapGlb(rig, color) {
+  if (!rig.glowAdded) {
+    rig.glowAdded = true;
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 3.4), new THREE.MeshBasicMaterial({
+      color: 0x149dff, transparent: true, opacity: 0.10, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    glow.rotation.x = -Math.PI / 2; glow.position.y = 0.03; glow.renderOrder = 1;
+    rig.root.add(glow);
   }
-  const wg = new THREE.CylinderGeometry(0.55, 0.55, 0.4, 16); wg.rotateZ(Math.PI / 2);
-  for (const z of [-4, -2.6, 3.4]) for (const x of [-1.15, 1.15]) add(wg, dark, x, 0.55, z);
-  const hl = new THREE.MeshBasicMaterial({ color: 0xfff4c0 });
-  for (const x of [-0.9, 0.9]) add(new THREE.BoxGeometry(0.4, 0.2, 0.05), hl, x, 1.0, 5.5);
-  const brakeMat = new THREE.MeshBasicMaterial({ color: 0x660000 });
-  for (const x of [-1.0, 1.0]) add(new THREE.BoxGeometry(0.3, 0.3, 0.05), brakeMat, x, 1.0, -5.52);
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 12), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.03; root.add(shadow);
-  return { root, wheels: [], brakeMat, halfL: 5.5, halfW: 1.3 };
+  const car = {
+    root: rig.root, glb: true, halfL: 2.3, halfW: 1.0,
+    wheels: [rig.wheels.fl, rig.wheels.fr, rig.wheels.rl, rig.wheels.rr],
+    setBodyColor: c => rig.bodyMats.forEach(m => m.color.set(c)),
+    setBrake: on => rig.tailMats.forEach(m => { m.emissiveIntensity = on ? 3.4 : 0.25; }),
+    setHead: on => { rig.headMats.forEach(m => { m.emissiveIntensity = on ? 2.4 : 1.2; }); rig.beams.forEach(b => { b.visible = on; }); },
+  };
+  car.setBodyColor(color);
+  return car;
+}
+function adoptPlayerCar(rig) {
+  playerCarRig = rig;
+  if (!player || player.glb) return;
+  const dyn = Object.assign({}, player);
+  const fresh = wrapGlb(rig, playerColor);
+  for (const k in dyn) if (!(k in fresh)) fresh[k] = dyn[k];
+  scene.remove(dyn.root);
+  player = fresh;
+  player.root.position.copy(dyn.root.position);
+  player.root.rotation.copy(dyn.root.rotation);
+  player.setHead(true);
+  scene.add(player.root);
 }
 
 // =====================================================================
 //  WORLD: road chunks, terrain, rails, scenery
 // =====================================================================
 const chunks = new Map();
-let treeTrunks, treeTops, treeData = [], lampMesh, lampData = [], mountains;
+let mountains;
 const turbineList = [], archList = []; // recycled roadside landmarks
 
 function buildWorld() {
@@ -431,27 +461,13 @@ function buildWorld() {
   railMat = new THREE.MeshStandardMaterial({ color: '#c8ccd0', metalness: 0.9, roughness: 0.35, side: THREE.DoubleSide });
   postMat = new THREE.MeshStandardMaterial({ color: '#777', metalness: 0.6, roughness: 0.5 });
 
-  // Trees (instanced, recycled)
-  const TREES = LOW_POWER_DEVICE ? 420 : 700;
-  const trunkG = new THREE.CylinderGeometry(0.25, 0.35, 3, 6); trunkG.translate(0, 1.5, 0);
-  const topG = new THREE.ConeGeometry(2.2, 6, 8); topG.translate(0, 5.5, 0);
-  treeTrunks = new THREE.InstancedMesh(trunkG, new THREE.MeshStandardMaterial({ color: '#5a3b22', roughness: 1 }), TREES);
-  treeTops = new THREE.InstancedMesh(topG, new THREE.MeshStandardMaterial({ color: '#2f5d2a', roughness: 0.9 }), TREES);
-  treeTops.castShadow = treeTrunks.castShadow = true;
-  treeTops.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(TREES * 3), 3);
-  for (let i = 0; i < TREES; i++) treeData.push({ z: -1e9 });
-  scene.add(treeTrunks, treeTops);
+  // Concrete / sound-barrier materials (upgraded by baked PBR textures)
+  concreteMat = new THREE.MeshStandardMaterial({ color: '#b9bdc2', roughness: 0.9, metalness: 0.05 });
+  soundMat = new THREE.MeshStandardMaterial({ color: '#98a0a6', roughness: 0.92, metalness: 0.02, side: THREE.DoubleSide });
+  reflectMat = new THREE.MeshBasicMaterial({ color: '#ffb347', toneMapped: false });
 
-  // Street lamps
-  const LAMPS = 30;
-  const lampG = new THREE.CylinderGeometry(0.1, 0.14, 8, 6); lampG.translate(0, 4, 0);
-  const armG = new THREE.BoxGeometry(2.4, 0.12, 0.12); armG.translate(-1.1, 8, 0);
-  const headG = new THREE.BoxGeometry(0.8, 0.15, 0.35); headG.translate(-2.1, 7.9, 0);
-  const lg = mergeGeos([lampG, armG, headG]);
-  lampMesh = new THREE.InstancedMesh(lg, new THREE.MeshStandardMaterial({ color: '#555b60', metalness: 0.8, roughness: 0.4 }), LAMPS);
-  lampMesh.castShadow = true;
-  for (let i = 0; i < LAMPS; i++) lampData.push({ z: -1e9 });
-  scene.add(lampMesh);
+  // Roadside world (forest, tufts, rocks, lamps, signs, billboards)
+  scenery = initScenery(scene, { x: roadX, y: roadY, dx: roadDX, dy: roadDY, terrainY }, LOW_POWER_DEVICE);
 
   // Wind turbines on the hills (animated, recycled) — living skyline
   const TURBINES = 6;
@@ -496,6 +512,10 @@ function buildWorld() {
       lamp.position.set(s * 2.2, 8.45, 0.55); g.add(lamp); lamps.push(lamp);
     }
     g.userData.lamps = lamps;
+    // green overhead direction sign hung under the beam
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(13.5, 3.4),
+      new THREE.MeshStandardMaterial({ map: gantrySignTexture(i), roughness: 0.55 }));
+    sign.position.set(0, 6.5, 0.5); g.add(sign);
     scene.add(g);
     archList.push({ z: -1e9, group: g });
   }
@@ -539,7 +559,7 @@ function buildChunk(idx) {
     for (let r = 0; r < rows; r++) {
       const z = z0 + r * SEG, cx = roadX(z), y = roadY(z) + 0.02;
       pos.push(cx - ROAD_HALF, y, z, cx + ROAD_HALF, y, z);
-      uv.push(0, z / 12, 1, z / 12);
+      uv.push(0, z / 24, 1, z / 24);
       if (r) { const a = (r - 1) * 2; ind.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     }
     const g = new THREE.BufferGeometry();
@@ -567,40 +587,66 @@ function buildChunk(idx) {
     g.setIndex(ind); g.computeVertexNormals();
     const m = new THREE.Mesh(g, grassMat); m.receiveShadow = true; group.add(m);
   }
-  // --- guard rails (ribbon) + posts
+  // --- W-beam guard rails (corrugated ribbon) + posts + delineators
   {
-    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.15, 0.9, 0.15), postMat, rows * 2);
+    const PROF_Y = [0.30, 0.42, 0.54, 0.66, 0.78], PROF_O = [0, 0.075, 0.025, 0.075, 0];
+    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.95, 0.14), postMat, rows * 2);
+    const refl = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 0.14, 0.03), reflectMat, Math.ceil(rows / 4) * 2);
     const dummy = new THREE.Object3D();
+    let ri = 0, pi = 0;
     for (const side of [-1, 1]) {
       const pos = [], ind = [];
       for (let r = 0; r < rows; r++) {
-        const z = z0 + r * SEG, x = roadX(z) + side * RAIL, y = roadY(z);
-        pos.push(x, y + 0.45, z, x, y + 0.85, z);
-        if (r) { const a = (r - 1) * 2; ind.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-        dummy.position.set(x + side * 0.1, y + 0.45, z); dummy.updateMatrix();
-        posts.setMatrixAt(r * 2 + (side > 0 ? 1 : 0), dummy.matrix);
+        const z = z0 + r * SEG, x0 = roadX(z) + side * RAIL, y0 = roadY(z);
+        for (let k = 0; k < PROF_Y.length; k++) pos.push(x0 + side * PROF_O[k], y0 + PROF_Y[k], z);
+        if (r) for (let k = 0; k < PROF_Y.length - 1; k++) {
+          const a = (r - 1) * PROF_Y.length + k, b = a + 1, c = a + PROF_Y.length, d = c + 1;
+          if (side > 0) ind.push(a, c, b, b, c, d); else ind.push(a, b, c, b, d, c);
+        }
+        if (r % 2 === 0) { dummy.position.set(x0 + side * 0.14, y0 + 0.5, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); posts.setMatrixAt(pi++, dummy.matrix); }
+        if (r % 4 === 0 && ri < Math.ceil(rows / 4) * 2) {
+          dummy.position.set(x0 - side * 0.06, y0 + 0.6, z); dummy.rotation.set(0, Math.atan(roadDX(z)) + (side > 0 ? Math.PI : 0), 0); dummy.updateMatrix();
+          refl.setMatrixAt(ri++, dummy.matrix);
+        }
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(ind); g.computeVertexNormals();
       const m = new THREE.Mesh(g, railMat); m.castShadow = true; group.add(m);
     }
-    posts.castShadow = true; group.add(posts);
-    // centre median: low concrete wall between the carriageways. Crossing it
-    // is allowed but the car rumbles, sparks and takes light damage.
-    const wallMat = new THREE.MeshStandardMaterial({ color: '#b9bdc2', roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide });
-    const wp = [], wi = [];
+    posts.count = pi; refl.count = ri;
+    posts.castShadow = true; group.add(posts); group.add(refl);
+    // --- centre median: concrete jersey barrier (F-shape profile ribbon)
+    const JP = [[-0.44, 0.04], [-0.44, 0.30], [-0.26, 0.66], [-0.19, 1.08], [0.19, 1.08], [0.26, 0.66], [0.44, 0.30], [0.44, 0.04]];
+    const wp = [], wuv = [], wi = [];
     for (let r = 0; r < rows; r++) {
       const z = z0 + r * SEG, cx = roadX(z), y = roadY(z) + 0.02;
-      // LB, LT, RB, RT, TL, TR — two vertical faces + a top cap
-      wp.push(cx - 0.38, y + 0.10, z, cx - 0.38, y + 0.55, z, cx + 0.38, y + 0.10, z, cx + 0.38, y + 0.55, z, cx - 0.38, y + 0.55, z, cx + 0.38, y + 0.55, z);
-      if (r) { const a = (r - 1) * 6, b = r * 6;
-        wi.push(a, a + 1, b, a + 1, b + 1, b, a + 2, a + 3, b + 2, a + 3, b + 3, b + 2, a + 4, a + 5, b + 4, a + 5, b + 5, b + 4); }
+      for (let k = 0; k < JP.length; k++) { wp.push(cx + JP[k][0], y + JP[k][1], z); wuv.push(k * 0.35, z); }
+      if (r) for (let k = 0; k < JP.length - 1; k++) {
+        const a = (r - 1) * JP.length + k, b = a + 1, c = a + JP.length, d = c + 1;
+        wi.push(a, b, c, b, d, c);
+      }
     }
     const wg = new THREE.BufferGeometry();
     wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+    wg.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2));
     wg.setIndex(wi); wg.computeVertexNormals();
-    const wall = new THREE.Mesh(wg, wallMat); wall.castShadow = true; wall.receiveShadow = true;
+    const wall = new THREE.Mesh(wg, concreteMat); wall.castShadow = true; wall.receiveShadow = true;
     group.add(wall);
+    // --- noise-barrier wall on some stretches (deterministic per chunk)
+    if (((idx * 2654435761) >>> 0) % 5 === 0) {
+      const side = (((idx * 40503) >>> 0) % 2) ? 1 : -1;
+      const sp = [], suv = [], si = [];
+      for (let r = 0; r < rows; r++) {
+        const z = z0 + r * SEG, x = roadX(z) + side * 18.5, y = terrainY(x, z);
+        sp.push(x, y - 0.2, z, x, y + 4.2, z); suv.push(z, 0, z, 4.2);
+        if (r) { const a = (r - 1) * 2, b = a + 1, c = a + 2, d = a + 3; if (side > 0) si.push(a, c, b, b, c, d); else si.push(a, b, c, b, d, c); }
+      }
+      const sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+      sg.setAttribute('uv', new THREE.Float32BufferAttribute(suv, 2));
+      sg.setIndex(si); sg.computeVertexNormals();
+      const sm = new THREE.Mesh(sg, soundMat); sm.castShadow = true; group.add(sm);
+    }
   }
   scene.add(group);
   return group;
@@ -619,24 +665,6 @@ function updateChunks(z) {
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Color();
 function updateScenery(pz) {
-  // trees
-  for (let i = 0; i < treeData.length; i++) {
-    const t = treeData[i];
-    if (t.z < pz - 40 || t.z > pz + 900) {
-      t.z = (t.z < -1e8 ? pz - 30 + Math.random() * 930 : pz + 700 + Math.random() * 200);
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const off = side * (14 + Math.pow(Math.random(), 1.6) * 180);
-      const x = roadX(t.z) + off;
-      const sc = 0.7 + Math.random() * 1.0;
-      _p.set(x, terrainY(x, t.z) - 0.2, t.z); _q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, Math.random() * 6); _s.set(sc, sc * (0.8 + Math.random() * 0.5), sc);
-      _m.compose(_p, _q, _s);
-      treeTrunks.setMatrixAt(i, _m); treeTops.setMatrixAt(i, _m);
-      _c.setHSL(0.22 + Math.random() * 0.1, 0.45, 0.18 + Math.random() * 0.12);
-      treeTops.setColorAt(i, _c);
-      treeTrunks.instanceMatrix.needsUpdate = treeTops.instanceMatrix.needsUpdate = true;
-      treeTops.instanceColor.needsUpdate = true;
-    }
-  }
   // wind turbines
   for (let i = 0; i < turbineList.length; i++) {
     const t = turbineList[i];
@@ -659,20 +687,7 @@ function updateScenery(pz) {
       a.group.rotation.y = Math.atan(roadDX(a.z));
     }
   }
-  // lamps every 60m on alternating sides
-  for (let i = 0; i < lampData.length; i++) {
-    const l = lampData[i];
-    if (l.z < pz - 40) {
-      const base = Math.floor((pz - 30) / 60) * 60;
-      if (l.z < -1e8) l.z = base + i * 60; else l.z += lampData.length * 60;
-      const side = (Math.round(l.z / 60) % 2) ? 1 : -1;
-      const x = roadX(l.z) + side * (RAIL + 0.8);
-      _p.set(x, roadY(l.z), l.z);
-      _q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, side > 0 ? 0 : Math.PI);
-      _s.set(1, 1, 1); _m.compose(_p, _q, _s);
-      lampMesh.setMatrixAt(i, _m); lampMesh.instanceMatrix.needsUpdate = true;
-    }
-  }
+  if (scenery) scenery.update(pz);
 }
 
 function animateLandmarks(dt) {
@@ -735,14 +750,15 @@ function resetGame() {
   obstacles.forEach(o => scene.remove(o.mesh)); obstacles.length = 0;
   pickups.forEach(o => scene.remove(o.mesh)); pickups.length = 0;
   if (player) scene.remove(player.root);
-  player = makeCar(playerColor, true);
+  player = playerCarRig ? wrapGlb(playerCarRig, playerColor) : wrapProc(makeCar(playerColor, true));
+  player.setHead(true);
   scene.add(player.root);
   Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2 });
   Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, nextPad: 700, over: false, overTimer: 0, runEnded: false, revived: false });
   gameTime = 0;
   shake = 0;
-  treeData.forEach(t => t.z = -1e9); lampData.forEach(l => l.z = -1e9);
   updateChunks(0); updateScenery(0);
+  if (scenery) scenery.reset(0);
 }
 
 // ----- traffic -----
@@ -759,7 +775,7 @@ function spawnTraffic() {
   if (traffic.some(t => Math.abs(t.lane - lane) < 1 && Math.abs(t.z - z) < 35)) return;
   if (obstacles.some(o => Math.abs(o.lat - lane) < 2 && Math.abs(o.z - z) < 50)) return;
   const truck = Math.random() < 0.25;
-  const car = truck ? makeTruck() : makeCar(new THREE.Color().setHSL(Math.random(), 0.7, 0.2 + Math.random() * 0.4));
+  const car = makeTrafficVehicle(truck);
   const spdR = oncoming ? d.oncomingSpd : d.sameSpd;
   let spd = (spdR[0] + Math.random() * (spdR[1] - spdR[0])) * (truck ? 0.8 : 1) * (1 + level * 0.25);
   Object.assign(car, { lane, targetLane: lane, z, speed: oncoming ? -spd : spd, baseSpeed: spd, oncoming, truck, passed: false, crashed: false, spinV: 0, yaw: 0, dead: false, honked: false, laneTimer: 3 + Math.random() * 6 });
@@ -805,7 +821,7 @@ function updateTraffic(dt) {
       t.lane += THREE.MathUtils.clamp(t.targetLane - t.lane, -2.2 * dt, 2.2 * dt);
       t.speed += THREE.MathUtils.clamp(desired - t.speed, -12 * dt, 5 * dt);
       t.yaw = (t.targetLane - t.lane) * 0.06 * Math.sign(t.speed);
-      t.brakeMat.color.setHex(Math.abs(t.speed) < Math.abs(desired) - 0.5 || Math.abs(desired) < t.baseSpeed - 1 ? 0xff2020 : 0x550000);
+      t.brakeMat.emissiveIntensity = (Math.abs(t.speed) < Math.abs(desired) - 0.5 || Math.abs(desired) < t.baseSpeed - 1) ? 2.8 : 0.15;
     }
     t.z += t.speed * dt;
     const x = roadX(t.z) + t.lane, y = roadY(t.z);
@@ -1017,7 +1033,7 @@ function updatePlayer(dt) {
   const pitch = -Math.atan(roadDY(p.z)) + (acc < -10 ? 0.02 : throttle ? -0.012 : 0);
   p.root.rotation.set(pitch, p.heading, -p.steer * Math.min(1, av / 50) * 0.04, 'YXZ');
   p.wheels.forEach((w, i) => { w.rotation.x -= p.v * dt / 0.36; if (i < 2) w.rotation.y = p.steer * 0.45; });
-  p.brakeMat.color.setHex(down || hand ? 0xff1010 : 0x440000);
+  p.setBrake(down || hand);
 
   // tyre smoke / nitro flames
   if (p.skid > 0.3) for (let i = 0; i < 2; i++) {
@@ -1290,7 +1306,7 @@ function toMenu() {
 const colorsDiv = el('colors');
 CAR_COLORS.forEach((c, i) => {
   const d = document.createElement('div'); d.style.background = c; if (!i) d.classList.add('sel');
-  d.onclick = () => { playerColor = c; colorsDiv.querySelectorAll('div').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); if (player) player.bodyMat.color.set(c); };
+  d.onclick = () => { playerColor = c; colorsDiv.querySelectorAll('div').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); if (player) player.setBodyColor(c); };
   colorsDiv.appendChild(d);
 });
 document.querySelectorAll('.diff button').forEach(b => b.onclick = () => { difficulty = +b.dataset.d; document.querySelectorAll('.diff button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });

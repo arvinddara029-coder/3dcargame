@@ -40,3 +40,30 @@ W/↑ gas · S/↓ brake/reverse · A/D steer · SPACE handbrake · SHIFT nitro 
 - Grass texture, HDR environment and Three.js — from the [three.js](https://github.com/mrdoob/three.js) repository examples (MIT)
 - Music: "Bad Cat [Master Version]" by Skullbeatz — Newgrounds, CC BY-NC-SA (see `assets/sounds/LICENSE-music.txt`)
 - Engine/effects sounds are synthesized in real time with the Web Audio API
+
+## Realistic assets (v9)
+
+- **Player car** — `assets/models/player_car.glb`: the high-detail Ferrari
+  (Sketchfab-style FBX export, Draco-compressed in `ferrari.glb`) decoded,
+  re-oriented, normalised to 4.55 m, simplified and quantised offline by
+  `tools/build_assets.mjs`. It loads with a plain `GLTFLoader` (no Draco
+  Web-Worker), tints to the menu paint colour, steers/spins its real wheel
+  nodes, flashes emissive tail-lights and casts head-light spot beams.
+  Low-power/mobile devices keep the procedural body (fail-safe boot).
+- **Road** — baked PBR asphalt set (`assets/textures/road_albedo|normal|rough.jpg`,
+  26 m x 24 m tile): aggregate, cracks, tar snakes, repainted patches,
+  polished wheel paths and worn lane markings; plus concrete PBR set for the
+  new jersey-barrier median and a grass normal map derived from `grass.jpg`.
+- **Roadside** — W-beam guard rails with delineators, noise-barrier walls,
+  green overhead/route signs, speed & chevron signs, kilometre posts,
+  curved-arm street lamps with warm light pools, billboards, mixed forest
+  (pine/broadleaf/birch), bushes, rocks and alpha-tested grass tufts.
+- **Traffic** — 7 vehicle classes (sedan, hatch, SUV, pickup, van, semi,
+  bus) with clearcoat paint, tinted glass, mirrors, light bars and steel
+  wheels; each bakes to ~8-16 draw calls.
+
+Regenerate everything with:
+
+```bash
+cd tools && npm install && node build_assets.mjs   # car + textures
+```
