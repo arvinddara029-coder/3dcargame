@@ -4,6 +4,7 @@ import { GameAudio } from './audio.js';
 import { loadWorldTextures, loadPlayerCar, gantrySignTexture } from './assets.js';
 import { makeTrafficVehicle } from './fleet.js';
 import { initScenery } from './scenery.js';
+import { CAR_LIST, buildPlayableCar } from './garage.js';
 import { ads } from './ads.js';
 
 // =====================================================================
@@ -48,7 +49,7 @@ try {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOW_POWER_DEVICE ? 1 : 1.5));
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.9;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
@@ -408,6 +409,7 @@ function makeCar(color, isPlayer = false) {
 }
 
 let playerCarRig = null;
+let selectedCarId = 'VELOCE';
 function wrapProc(car) {
   car.glb = false;
   car.setBodyColor = c => car.bodyMat.color.set(c);
@@ -424,8 +426,10 @@ function wrapGlb(rig, color) {
     glow.rotation.x = -Math.PI / 2; glow.position.y = 0.03; glow.renderOrder = 1;
     rig.root.add(glow);
   }
+  const meta = CAR_LIST.find(c => c.id === 'SPIDER') || {};
   const car = {
-    root: rig.root, glb: true, halfL: 2.3, halfW: 1.0,
+    root: rig.root, glb: true, halfL: 2.3, halfW: 1.0, id: 'SPIDER',
+    vmax: meta.vmax || 74, vmaxN: meta.vmaxN || 94, steer: meta.steer || 1.05,
     wheels: [rig.wheels.fl, rig.wheels.fr, rig.wheels.rl, rig.wheels.rr],
     setBodyColor: c => rig.bodyMats.forEach(m => m.color.set(c)),
     setBrake: on => rig.tailMats.forEach(m => { m.emissiveIntensity = on ? 3.4 : 0.25; }),
@@ -436,6 +440,16 @@ function wrapGlb(rig, color) {
 }
 function adoptPlayerCar(rig) {
   playerCarRig = rig;
+  if (selectedCarId === 'SPIDER' && state === 'menu' && player && !player.glb) {
+    const dyn = Object.assign({}, player);
+    const fresh = wrapGlb(rig, playerColor);
+    for (const k in dyn) if (!(k in fresh)) fresh[k] = dyn[k];
+    scene.remove(dyn.root);
+    player = fresh;
+    player.root.position.copy(dyn.root.position);
+    scene.add(player.root);
+    return;
+  }
   if (!player || player.glb) return;
   const dyn = Object.assign({}, player);
   const fresh = wrapGlb(rig, playerColor);
@@ -467,7 +481,7 @@ function buildWorld() {
   reflectMat = new THREE.MeshBasicMaterial({ color: '#ffb347', toneMapped: false });
 
   // Roadside world (forest, tufts, rocks, lamps, signs, billboards)
-  scenery = initScenery(scene, { x: roadX, y: roadY, dx: roadDX, dy: roadDY, terrainY }, LOW_POWER_DEVICE);
+  scenery = initScenery(scene, { x: roadX, y: roadY, dx: roadDX, dy: roadDY, terrainY }, LOW_POWER_DEVICE, { concrete: concreteMat });
 
   // Wind turbines on the hills (animated, recycled) — living skyline
   const TURBINES = 6;
@@ -687,7 +701,7 @@ function updateScenery(pz) {
       a.group.rotation.y = Math.atan(roadDX(a.z));
     }
   }
-  if (scenery) scenery.update(pz);
+  if (scenery) scenery.update(pz, roadX(pz));
 }
 
 function animateLandmarks(dt) {
@@ -750,15 +764,16 @@ function resetGame() {
   obstacles.forEach(o => scene.remove(o.mesh)); obstacles.length = 0;
   pickups.forEach(o => scene.remove(o.mesh)); pickups.length = 0;
   if (player) scene.remove(player.root);
-  player = playerCarRig ? wrapGlb(playerCarRig, playerColor) : wrapProc(makeCar(playerColor, true));
+  if (selectedCarId === 'SPIDER' && playerCarRig) player = wrapGlb(playerCarRig, playerColor);
+  else player = buildPlayableCar(selectedCarId, playerColor);
   player.setHead(true);
   scene.add(player.root);
-  Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2 });
+  Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2, steerF: player.steer || 1, vmax: player.vmax || 72, vmaxN: player.vmaxN || 92 });
   Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, nextPad: 700, over: false, overTimer: 0, runEnded: false, revived: false });
   gameTime = 0;
   shake = 0;
   updateChunks(0); updateScenery(0);
-  if (scenery) scenery.reset(0);
+  if (scenery) scenery.reset(0, player.x);
 }
 
 // ----- traffic -----
@@ -963,7 +978,7 @@ function updatePlayer(dt) {
   const throttle = alive && up ? 1 : 0;
   p.throttle = throttle;
   p.nitroOn = wantNitro;
-  const vmax = wantNitro ? 92 : 72;
+  const vmax = wantNitro ? (p.vmaxN || 92) : (p.vmax || 72);
   let acc = 0;
   if (throttle) {
     if (p.v < 0) acc = 25; else acc = (wantNitro ? 18 : 11) * Math.pow(Math.max(0, 1 - p.v / vmax), 0.6) + 1.5;
@@ -979,7 +994,7 @@ function updatePlayer(dt) {
   const sIn = alive ? (left ? 1 : 0) - (right ? 1 : 0) : 0;
   p.steer += (sIn - p.steer) * Math.min(1, dt * (sIn ? 5 : 8));
   const speedFactor = Math.min(1, Math.abs(p.v) / 6) / (1 + Math.abs(p.v) * 0.028);
-  let yaw = p.steer * 1.9 * speedFactor * (hand ? 1.7 : 1);
+  let yaw = p.steer * 1.9 * (p.steerF || 1) * speedFactor * (hand ? 1.7 : 1);
   p.heading += (yaw * Math.sign(p.v) + p.spin) * dt;
   p.spin *= Math.pow(0.05, dt);
 
@@ -1170,6 +1185,7 @@ function updateCamera(dt, snap = false) {
   camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
   sky.position.copy(camera.position);
   mountains.position.set(camera.position.x, 0, camera.position.z);
+  if (scenery) for (const g of scenery.follow) g.position.set(camera.position.x, 0, camera.position.z);
   sun.position.set(p.x + 30, y + 60, p.z - 20); sun.target.position.set(p.x, y, p.z + 10);
 }
 
@@ -1303,6 +1319,20 @@ function toMenu() {
 }
 
 // menu wiring
+// garage chips
+const carsDiv = el('cars');
+CAR_LIST.forEach((c, i) => {
+  const b = document.createElement('button');
+  b.textContent = c.name; b.title = c.tag;
+  if (c.id === selectedCarId) b.classList.add('sel');
+  b.onclick = () => {
+    selectedCarId = c.id;
+    carsDiv.querySelectorAll('button').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel');
+    if (state === 'menu') { resetGame(); player.setBodyColor(playerColor); }
+  };
+  carsDiv.appendChild(b);
+});
 const colorsDiv = el('colors');
 CAR_COLORS.forEach((c, i) => {
   const d = document.createElement('div'); d.style.background = c; if (!i) d.classList.add('sel');
@@ -1403,6 +1433,7 @@ function loop() {
     camera.fov = 50; camera.updateProjectionMatrix();
     sky.position.copy(camera.position);
     mountains.position.set(camera.position.x, 0, camera.position.z);
+    if (scenery) for (const g of scenery.follow) g.position.set(camera.position.x, 0, camera.position.z);
     sun.position.set(player.x + 30, y + 60, player.z - 20); sun.target.position.set(player.x, y, player.z);
   } else if (state === 'over' || state === 'pause') {
     // keep scene rendered; fade engine/wind loops out so they don't drone forever

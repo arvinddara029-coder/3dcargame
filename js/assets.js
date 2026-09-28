@@ -169,6 +169,52 @@ export function lightPoolTexture() {
     g.fillStyle = r; g.fillRect(0, 0, w, h);
   });
 }
+// soft cloud puff
+export function cloudTexture() {
+  return canvas(256, 256, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    let s = 3;
+    const rr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 16; i++) {
+      const x = 40 + rr() * 176, y = 110 + (rr() - 0.5) * 70, r = 30 + rr() * 55;
+      const grd = g.createRadialGradient(x, y, 2, x, y, r);
+      grd.addColorStop(0, 'rgba(255,252,246,0.85)');
+      grd.addColorStop(0.6, 'rgba(255,244,230,0.35)');
+      grd.addColorStop(1, 'rgba(255,240,220,0)');
+      g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  }, 'cloud');
+}
+// city windows for the horizon skyline
+export function windowsTexture() {
+  return canvas(128, 256, (g, w, h) => {
+    g.fillStyle = '#20242c'; g.fillRect(0, 0, w, h);
+    let s = 11;
+    const rr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let y = 6; y < h - 6; y += 12) for (let x = 6; x < w - 6; x += 10) {
+      const lit = rr();
+      g.fillStyle = lit > 0.62 ? (lit > 0.9 ? '#ffd9a0' : '#c8d8e8') : '#12151b';
+      g.globalAlpha = 0.5 + lit * 0.5;
+      g.fillRect(x, y, 6, 7);
+    }
+    g.globalAlpha = 1;
+  }, 'win');
+}
+// crop rows for roadside fields
+export function cropTexture() {
+  return canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#6a7a3a'; g.fillRect(0, 0, w, h);
+    let s = 5;
+    const rr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let x = 0; x < w; x += 8) {
+      g.fillStyle = `hsl(${70 + rr() * 30}, ${30 + rr() * 20}%, ${26 + rr() * 16}%)`;
+      g.fillRect(x, 0, 5, h);
+    }
+    g.globalAlpha = 0.25;
+    for (let i = 0; i < 900; i++) { g.fillStyle = rr() > 0.5 ? '#8a9a4a' : '#4a5a2a'; g.fillRect(rr() * w, rr() * h, 2, 2); }
+    g.globalAlpha = 1;
+  }, 'crop');
+}
 // alpha-tested grass tuft card
 export function tuftTexture() {
   return canvas(128, 128, (g, w, h) => {

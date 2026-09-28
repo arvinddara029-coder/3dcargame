@@ -281,7 +281,7 @@ function buildGrassNormal() {
 // =====================================================================
 async function buildPlayerCar() {
   const SRC = path.join(OUT_MODEL, 'ferrari.glb');
-  const OUT = path.join(OUT_MODEL, 'player_car.glb');
+  const OUT = process.env.OUT || path.join(OUT_MODEL, 'player_car.glb');
   if (!fs.existsSync(SRC)) return console.log('  (ferrari.glb missing, skipped)');
   console.log('decoding + simplifying ferrari.glb…');
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
@@ -381,12 +381,15 @@ async function buildPlayerCar() {
   const old = sceneRoot.getMatrix();
   sceneRoot.setMatrix(mul(M, old));
 
-  // ---- drop hidden interior shells (invisible behind tinted glass, ~72k tris)
-  for (const name of ['interior_light', 'interior_dark', 'carpet']) {
-    const n = byName(name);
-    if (n) { const m = n.getMesh(); n.setMesh(null); if (m) m.dispose(); }
+  // NOTE: the FBX export hides the roof skin inside 'interior_light', so the
+  // interior shells must stay (they also give the cabin depth behind glass).
+  if (process.env.DROP_INTERIOR) {
+    for (const name of ['interior_light', 'interior_dark', 'carpet']) {
+      const n = byName(name);
+      if (n) { const m = n.getMesh(); n.setMesh(null); if (m) m.dispose(); }
+    }
+    await doc.transform(prune());
   }
-  await doc.transform(prune());
 
   // ---- optimise: weld -> simplify -> quantise (KHR_mesh_quantisation needs no runtime worker)
   const triCount = () => {

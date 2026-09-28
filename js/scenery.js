@@ -6,7 +6,7 @@
 // =====================================================================
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { speedSignTexture, chevronSignTexture, gantrySignTexture, billboardTexture, lightPoolTexture, tuftTexture } from './assets.js';
+import { speedSignTexture, chevronSignTexture, gantrySignTexture, billboardTexture, lightPoolTexture, tuftTexture, cloudTexture, windowsTexture, cropTexture } from './assets.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(),
   _c = new THREE.Color(), _up = new THREE.Vector3(0, 1, 0), _e = new THREE.Euler();
@@ -22,8 +22,8 @@ function park(im, i, x, y, z, ry, sx, sy = sx, sz = sx) {
   _m.compose(_p, _q, _s); im.setMatrixAt(i, _m); im.instanceMatrix.needsUpdate = true;
 }
 
-export function initScenery(scene, road, LOW) {
-  const S = { systems: [] };
+export function initScenery(scene, road, LOW, mats = {}) {
+  const S = { systems: [], follow: [] };
 
   // ---------------------------------------------------------------- trees
   const TREES = LOW ? 150 : 260;
@@ -210,8 +210,126 @@ export function initScenery(scene, road, LOW) {
     S.billboards.push({ z: -1e9, group: g });
   }
 
+  // ------------------------------------------------------------ clouds
+  const CLOUD = LOW ? 8 : 16;
+  const cloudMesh = instanced(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+    map: cloudTexture(), transparent: true, depthWrite: false, opacity: 0.9, fog: false,
+  }), CLOUD, false);
+  cloudMesh.renderOrder = 3;
+  scene.add(cloudMesh);
+  const cloudData = Array.from({ length: CLOUD }, () => ({ z: -1e9, x: 0 }));
+  const placeCloud = (i, px, pz) => {
+    const a = Math.random() * Math.PI * 2, r = 250 + Math.random() * 550;
+    const x = px + Math.cos(a) * r, z = pz + Math.sin(a) * r;
+    const sc = 90 + Math.random() * 150;
+    _p.set(x, 140 + Math.random() * 110, z); _q.setFromAxisAngle(_up, Math.random() * 6); _s.set(sc, sc * (0.4 + Math.random() * 0.3), 1);
+    _e.set(-Math.PI / 2, 0, 0, 'YXZ'); _q.setFromEuler(_e);
+    _m.compose(_p, _q, _s); cloudMesh.setMatrixAt(i, _m); cloudMesh.instanceMatrix.needsUpdate = true;
+    cloudData[i].x = x; cloudData[i].z = z;
+  };
+  S.clouds = { mesh: cloudMesh, data: cloudData, place: placeCloud };
+
+  // ------------------------------------------------- horizon skyline
+  const SKY = LOW ? 24 : 44;
+  const skyGeo = new THREE.BoxGeometry(1, 1, 1); skyGeo.translate(0, 0.5, 0);
+  const winMat = new THREE.MeshStandardMaterial({ map: windowsTexture(), emissive: 0xffcf90, emissiveIntensity: 0.28, roughness: 0.9, fog: false });
+  const skyMesh = instanced(skyGeo, winMat, SKY, false);
+  const skyGroup = new THREE.Group();
+  skyGroup.add(skyMesh); scene.add(skyGroup);
+  S.follow.push(skyGroup);
+  {
+    let sd = 99;
+    const rr = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < SKY; i++) {
+      const a = (i / SKY) * Math.PI * 2 + (rr() - 0.5) * 0.2;
+      const d = 680 + rr() * 260, hgt = 35 + rr() * 120, wid = 22 + rr() * 34;
+      _p.set(Math.cos(a) * d, -6, Math.sin(a) * d); _q.identity(); _s.set(wid, hgt, wid * (0.6 + rr() * 0.8));
+      _m.compose(_p, _q, _s); skyMesh.setMatrixAt(i, _m);
+    }
+    skyMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // ------------------------------------------------- highway overpasses
+  const OV = 2;
+  S.overpasses = [];
+  const conc = mats.concrete || new THREE.MeshStandardMaterial({ color: '#b4b8bc', roughness: 0.9 });
+  for (let i = 0; i < OV; i++) {
+    const g = new THREE.Group();
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(52, 1.3, 9), conc);
+    deck.position.y = 7.2; deck.castShadow = true; g.add(deck);
+    for (const sx of [-1, 1]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(52, 1.1, 0.35), conc);
+      rail.position.set(0, 8.3, sx * 4.4); rail.castShadow = true; g.add(rail);
+      const pier = new THREE.Mesh(new THREE.BoxGeometry(2.2, 7.4, 7), conc);
+      pier.position.set(sx * 17.5, 3.6, 0); pier.castShadow = true; g.add(pier);
+    }
+    scene.add(g);
+    S.overpasses.push({ z: -1e9, group: g });
+  }
+
+  // ------------------------------------------- power pylons + wires
+  const PY = 6;
+  const pylonGeo = (() => {
+    const parts = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const leg = new THREE.BoxGeometry(0.35, 26, 0.35);
+      leg.translate(0, 13, 0);
+      const m = new THREE.Matrix4().makeRotationX(sz * 0.06).multiply(new THREE.Matrix4().makeRotationZ(-sx * 0.06));
+      m.setPosition(sx * 2.2, 0, sz * 2.2);
+      leg.applyMatrix4(m); parts.push(leg);
+    }
+    for (const y of [10, 17, 24]) parts.push(new THREE.BoxGeometry(5.4 - y * 0.08, 0.3, 0.3).translate(0, y, 0));
+    const arm = new THREE.BoxGeometry(14, 0.4, 0.4); arm.translate(0, 24.5, 0); parts.push(arm);
+    const arm2 = new THREE.BoxGeometry(10, 0.4, 0.4); arm2.translate(0, 20.5, 0); parts.push(arm2);
+    return mergeGeometries(parts, false);
+  })();
+  const pylonMesh = instanced(pylonGeo, new THREE.MeshStandardMaterial({ color: '#6d747a', metalness: 0.7, roughness: 0.5 }), PY);
+  scene.add(pylonMesh);
+  const pylonData = Array.from({ length: PY }, () => ({ z: -1e9, x: 0, y: 0 }));
+  const wireMat = new THREE.MeshStandardMaterial({ color: '#20242a', roughness: 0.6 });
+  const wires = [];
+  for (let i = 0; i < PY; i++) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 4), wireMat); w.visible = false; scene.add(w); wires.push(w); }
+  S.pylons = { mesh: pylonMesh, data: pylonData, wires };
+  const placePylon = (i, z) => {
+    const x = road.x(z) - 62, y = road.terrainY(x, z);
+    park(pylonMesh, i, x, y - 0.5, z, 0, 1);
+    pylonData[i].x = x; pylonData[i].y = y; pylonData[i].z = z;
+    // re-string wires to the neighbouring pylons
+    for (let k = 0; k < PY; k++) {
+      const a = pylonData[k], b = pylonData[(k + 1) % PY];
+      const w = wires[k];
+      if (!a.z || !b.z || a.z < -1e8 || b.z < -1e8 || Math.abs(a.z - b.z) > 900) { w.visible = false; continue; }
+      const ax = a.x, ay = a.y + 24.5, az = a.z, bx = b.x, by = b.y + 24.5, bz = b.z;
+      const len = Math.hypot(bx - ax, by - ay, bz - az);
+      w.visible = true;
+      w.position.set((ax + bx) / 2, (ay + by) / 2 - len * 0.02, (az + bz) / 2);
+      w.scale.set(1, len, 1);
+      w.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(bx - ax, by - ay, bz - az).normalize());
+    }
+  };
+  S.systems.push({ data: pylonData, place: (i, z) => placePylon(i, z), fixed: 480 });
+
+  // ---------------------------------------------------- crop fields
+  const FLD = LOW ? 4 : 8;
+  const cropTex = cropTexture();
+  cropTex.repeat.set(8, 12);
+  const fieldMesh = instanced(new THREE.PlaneGeometry(110, 170), new THREE.MeshStandardMaterial({ map: cropTex, roughness: 1 }), FLD, false);
+  scene.add(fieldMesh);
+  const fieldData = Array.from({ length: FLD }, () => ({ z: -1e9 }));
+  S.systems.push({ data: fieldData, place: (i, z) => {
+    const side = (i % 2) ? 1 : -1;
+    const off = side * (30 + Math.random() * 55);
+    const x = road.x(z) + off;
+    const y = road.terrainY(x, z);
+    const nx = -(road.terrainY(x + 2, z) - road.terrainY(x - 2, z)) / 4;
+    const nz = -(road.terrainY(x, z + 2) - road.terrainY(x, z - 2)) / 4;
+    const n = new THREE.Vector3(nx, 1, nz).normalize();
+    _p.set(x, y + 0.22, z); _q.setFromUnitVectors(_up, n); _s.set(1, 1, 1);
+    _m.compose(_p, _q, _s); fieldMesh.setMatrixAt(i, _m); fieldMesh.instanceMatrix.needsUpdate = true;
+  }, fixed: 420 });
+
   // =====================================================================
-  S.update = pz => {
+  S.update = (pz, px = 0) => {
     for (const sys of S.systems) {
       const data = sys.data;
       for (let i = 0; i < data.length; i++) {
@@ -229,6 +347,20 @@ export function initScenery(scene, road, LOW) {
         }
       }
     }
+    // clouds drift around the player
+    for (let i = 0; i < S.clouds.data.length; i++) {
+      const d = S.clouds.data[i];
+      if (d.z < -1e8 || Math.hypot(d.x - px, d.z - pz) > 950) S.clouds.place(i, px, pz);
+    }
+    // overpasses on a fixed cadence
+    for (let i = 0; i < S.overpasses.length; i++) {
+      const o = S.overpasses[i];
+      if (o.z < pz - 80 || o.z > pz + 1600) {
+        o.z = o.z < -1e8 ? pz + 500 + i * 750 : pz + 1400 + Math.random() * 300;
+        o.group.position.set(road.x(o.z), road.y(o.z), o.z);
+        o.group.rotation.y = Math.atan(road.dx(o.z));
+      }
+    }
     for (let i = 0; i < S.billboards.length; i++) {
       const b = S.billboards[i];
       if (b.z < pz - 80 || b.z > pz + 1100) {
@@ -240,10 +372,12 @@ export function initScenery(scene, road, LOW) {
       }
     }
   };
-  S.reset = pz => {
+  S.reset = (pz, px = 0) => {
     for (const sys of S.systems) sys.data.forEach(d => d.z = -1e9);
     S.billboards.forEach(b => b.z = -1e9);
-    S.update(pz);
+    S.overpasses.forEach(o => o.z = -1e9);
+    S.clouds.data.forEach(d => { d.z = -1e9; d.x = 0; });
+    S.update(pz, px);
   };
   return S;
 }

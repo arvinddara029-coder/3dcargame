@@ -45,3 +45,8 @@ button.revive:disabled{filter:grayscale(.8);animation:none;opacity:.6}
 #touch .tright button{font-size:13px}#touch .g{background:rgba(60,255,120,.3)}#touch .b{background:rgba(255,60,60,.3)}#touch .n{background:rgba(0,200,255,.35)}
 #touch .tleft{flex-wrap:wrap;max-width:190px}#touch button.mini{width:56px;height:56px;font-size:24px;margin:2px}#touch .h{background:rgba(255,190,60,.3)}#touch .cam{background:rgba(180,120,255,.35)}
 @media (max-width:760px){#topbar .stat:nth-child(4){display:none}.stat{min-width:78px;padding:4px 8px}.stat span:last-child{font-size:16px}#gauge{width:150px;height:150px;bottom:170px}#minimap{display:none}#help{display:none}#bars{width:130px;top:70px}}
+
+/* garage chips */
+.cars { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 10px 0 4px; }
+.cars button { padding: 8px 14px; border-radius: 20px; border: 1px solid #ffffff33; background: #ffffff12; color: #dfe7ee; font: 700 12px/1 system-ui, sans-serif; letter-spacing: 1px; cursor: pointer; }
+.cars button.sel { background: #ffb300; color: #16130a; border-color: #ffb300; box-shadow: 0 0 18px #ffb30066; }
