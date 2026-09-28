@@ -104,66 +104,59 @@ function createRealisticRoadTextures() {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
 
-  const bC = document.createElement('canvas'); bC.width = W; bC.height = H;
-  const bG = bC.getContext('2d');
-
   const rC = document.createElement('canvas'); rC.width = W; rC.height = H;
   const rG = rC.getContext('2d');
 
-  // Base asphalt background
-  g.fillStyle = '#232528'; g.fillRect(0, 0, W, H);
-  bG.fillStyle = '#808080'; bG.fillRect(0, 0, W, H); // neutral bump
-  rG.fillStyle = '#d7d7d7'; rG.fillRect(0, 0, W, H); // base roughness ~0.84
+  // Base asphalt background: deep, rich stone mastic asphalt
+  g.fillStyle = '#212327'; g.fillRect(0, 0, W, H);
+  rG.fillStyle = '#dcdcdc'; rG.fillRect(0, 0, W, H); // base roughness ~0.86 (matte aggregate)
 
-  // Procedural stone aggregate and bitumen noise
-  const img = g.getImageData(0, 0, W, H);
-  const bumpImg = bG.getImageData(0, 0, W, H);
-  const d = img.data, bd = bumpImg.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const n = (Math.random() - 0.5) * 30;
-    const stone = Math.random() < 0.08 ? (Math.random() - 0.3) * 44 : 0;
-    const val = n + stone;
-    d[i] = Math.min(255, Math.max(0, d[i] + val));
-    d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + val));
-    d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + val + 2));
-    const bVal = Math.min(255, Math.max(0, 128 + Math.round(n * 0.9 + stone * 1.5)));
-    bd[i] = bd[i + 1] = bd[i + 2] = bVal;
+  // Soft natural macro-variation: subtle darker bitumen sweeps and lighter aggregate patches
+  for (let i = 0; i < 40; i++) {
+    const y = Math.random() * H;
+    const h = 80 + Math.random() * 220;
+    const alpha = 0.03 + Math.random() * 0.05;
+    g.fillStyle = i % 2 === 0 ? `rgba(12, 13, 16, ${alpha})` : `rgba(45, 48, 54, ${alpha})`;
+    g.fillRect(0, y, W, h);
   }
-  g.putImageData(img, 0, 0);
-  bG.putImageData(bumpImg, 0, 0);
+
+  // Smooth, anti-aliased stone aggregate speckling (no single-pixel sparkling noise)
+  g.fillStyle = 'rgba(235, 238, 242, 0.07)';
+  for (let i = 0; i < 12000; i++) {
+    const x = Math.random() * W, y = Math.random() * H, r = 1 + Math.random() * 2.2;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = 'rgba(8, 9, 12, 0.09)';
+  for (let i = 0; i < 14000; i++) {
+    const x = Math.random() * W, y = Math.random() * H, r = 1 + Math.random() * 2.4;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
 
   const px = l => Math.round(((l + ROAD_HALF) / (ROAD_HALF * 2)) * W);
 
-  // Highway Shoulders: outer 1.4m on each side
+  // Highway Shoulders: outer 1.4m on each side (weathered asphalt with aggregate grit)
   const sL = px(-ROAD_HALF + 1.4);
   const sR = px(ROAD_HALF - 1.4);
-  g.fillStyle = 'rgba(140, 145, 150, 0.16)';
+  g.fillStyle = 'rgba(120, 125, 132, 0.14)';
   g.fillRect(0, 0, sL, H);
   g.fillRect(sR, 0, W - sR, H);
+  rG.fillStyle = '#f0f0f0'; // rougher shoulder gravel
+  rG.fillRect(0, 0, sL, H);
+  rG.fillRect(sR, 0, W - sR, H);
 
-  // Shoulder Rumble Strips (grooved safety notches every 64 pixels along shoulders)
-  for (let y = 0; y < H; y += 64) {
+  // Shoulder Rumble Strips (milled safety grooves every 48 pixels with clean 3D bevel shading)
+  for (let y = 0; y < H; y += 48) {
     // Left shoulder rumble
-    g.fillStyle = 'rgba(15, 15, 18, 0.45)';
-    g.fillRect(sL - 18, y, 16, 26);
-    g.fillStyle = 'rgba(230, 230, 235, 0.35)';
-    g.fillRect(sL - 18, y + 26, 16, 38);
-
-    bG.fillStyle = '#404040'; // indent
-    bG.fillRect(sL - 18, y, 16, 26);
-    bG.fillStyle = '#b0b0b0'; // ridge
-    bG.fillRect(sL - 18, y + 26, 16, 38);
+    g.fillStyle = 'rgba(8, 8, 10, 0.58)'; // indented shadow lip
+    g.fillRect(sL - 18, y, 16, 20);
+    g.fillStyle = 'rgba(235, 238, 245, 0.40)'; // sunlit crest
+    g.fillRect(sL - 18, y + 20, 16, 28);
 
     // Right shoulder rumble
-    g.fillStyle = 'rgba(15, 15, 18, 0.45)';
-    g.fillRect(sR + 2, y, 16, 26);
-    g.fillStyle = 'rgba(230, 230, 235, 0.35)';
-    g.fillRect(sR + 2, y + 26, 16, 38);
-
-    bG.fillStyle = '#404040';
-    bG.fillRect(sR + 2, y, 16, 26);
-    bG.fillStyle = '#b0b0b0';
-    bG.fillRect(sR + 2, y + 26, 16, 38);
+    g.fillStyle = 'rgba(8, 8, 10, 0.58)';
+    g.fillRect(sR + 2, y, 16, 20);
+    g.fillStyle = 'rgba(235, 238, 245, 0.40)';
+    g.fillRect(sR + 2, y + 20, 16, 28);
   }
 
   // Polished Tire Tracks and Oil Drips in every lane
@@ -172,61 +165,78 @@ function createRealisticRoadTextures() {
     const tL = px(l - 0.85);
     const tR = px(l + 0.85);
 
-    // Soft dark rubber sheen
-    g.fillStyle = 'rgba(8, 9, 12, 0.22)';
-    g.fillRect(tL - 10, 0, 20, H);
-    g.fillRect(tR - 10, 0, 20, H);
+    // Dark compacted rubber tire sheen
+    const gradL = g.createLinearGradient(tL - 16, 0, tL + 16, 0);
+    gradL.addColorStop(0, 'rgba(10, 12, 15, 0)');
+    gradL.addColorStop(0.5, 'rgba(10, 12, 15, 0.28)');
+    gradL.addColorStop(1, 'rgba(10, 12, 15, 0)');
+    g.fillStyle = gradL;
+    g.fillRect(tL - 16, 0, 32, H);
 
-    // Roughness map: tire tracks are smoother (lower roughness -> sky reflection sheen)
-    rG.fillStyle = 'rgba(90, 90, 90, 0.55)';
-    rG.fillRect(tL - 11, 0, 22, H);
-    rG.fillRect(tR - 11, 0, 22, H);
+    const gradR = g.createLinearGradient(tR - 16, 0, tR + 16, 0);
+    gradR.addColorStop(0, 'rgba(10, 12, 15, 0)');
+    gradR.addColorStop(0.5, 'rgba(10, 12, 15, 0.28)');
+    gradR.addColorStop(1, 'rgba(10, 12, 15, 0)');
+    g.fillStyle = gradR;
+    g.fillRect(tR - 16, 0, 32, H);
 
-    // Lane center oil / engine grime strip
-    g.fillStyle = 'rgba(12, 12, 15, 0.12)';
-    g.fillRect(cx - 7, 0, 14, H);
+    // Roughness map: tire tracks are smooth (low roughness = realistic sky/sun sheen)
+    rG.fillStyle = 'rgba(85, 85, 85, 0.65)';
+    rG.fillRect(tL - 15, 0, 30, H);
+    rG.fillRect(tR - 15, 0, 30, H);
+
+    // Lane center fine engine oil drip strip
+    g.fillStyle = 'rgba(8, 8, 10, 0.14)';
+    g.fillRect(cx - 8, 0, 16, H);
+    rG.fillStyle = 'rgba(65, 65, 65, 0.45)';
+    rG.fillRect(cx - 8, 0, 16, H);
   }
 
-  // Road Markings (Thermoplastic highway paint)
-  // 1. Solid Outer Edge Lines (Fog Lines)
-  g.fillStyle = '#f4f6f8';
-  g.fillRect(sL - 4, 0, 7, H);
-  g.fillRect(sR - 3, 0, 7, H);
-  rG.fillStyle = '#606060';
-  rG.fillRect(sL - 4, 0, 7, H);
-  rG.fillRect(sR - 3, 0, 7, H);
-  bG.fillStyle = '#9c9c9c';
-  bG.fillRect(sL - 4, 0, 7, H);
-  bG.fillRect(sR - 3, 0, 7, H);
+  // Road Markings (Thermoplastic highway paint with retroreflective glass beads)
+  // 1. Solid Outer Edge Lines (Fog Lines, 18cm wide)
+  g.fillStyle = '#f6f8fb';
+  g.fillRect(sL - 4, 0, 8, H);
+  g.fillRect(sR - 4, 0, 8, H);
+  rG.fillStyle = '#686868';
+  rG.fillRect(sL - 4, 0, 8, H);
+  rG.fillRect(sR - 4, 0, 8, H);
 
-  // 2. Dashed Lane Divider Lines (between lanes of each carriageway)
-  // 4m dash (512px) with 12m gap (1536px)
+  // 2. Dashed Lane Divider Lines (4m dash / 12m gap)
   for (const l of [-9, -6, -3, 3, 6, 9]) {
     const lx = px(l);
-    g.fillStyle = '#f4f6f8';
+    g.fillStyle = '#f6f8fb';
     g.fillRect(lx - 3, 0, 6, 512);
-    rG.fillStyle = '#606060';
+    rG.fillStyle = '#686868';
     rG.fillRect(lx - 3, 0, 6, 512);
-    bG.fillStyle = '#9c9c9c';
-    bG.fillRect(lx - 3, 0, 6, 512);
+
+    // 3D Retroreflective Cat's Eye Pavement Stud at dash start
+    g.fillStyle = '#ffffff';
+    g.fillRect(lx - 4, 16, 8, 14);
+    rG.fillStyle = '#202020'; // specular lens
+    rG.fillRect(lx - 4, 16, 8, 14);
   }
 
-  // 3. Double Solid Yellow Center Line (Median Boundary)
-  const yL = px(-0.25);
-  const yR = px(0.25);
-  g.fillStyle = '#f5ba00';
+  // 3. Double Solid Yellow Center Line (Carriageway Median Boundary)
+  const yL = px(-0.24);
+  const yR = px(0.24);
+  g.fillStyle = '#ffb703';
   g.fillRect(yL - 3, 0, 6, H);
   g.fillRect(yR - 3, 0, 6, H);
-  rG.fillStyle = '#606060';
+  rG.fillStyle = '#686868';
   rG.fillRect(yL - 3, 0, 6, H);
   rG.fillRect(yR - 3, 0, 6, H);
-  bG.fillStyle = '#9c9c9c';
-  bG.fillRect(yL - 3, 0, 6, H);
-  bG.fillRect(yR - 3, 0, 6, H);
+
+  // Yellow Cat's Eye Studs every 256 pixels along median
+  for (let y = 32; y < H; y += 256) {
+    g.fillStyle = '#ffe066';
+    g.fillRect(px(0) - 3, y, 6, 14);
+    rG.fillStyle = '#202020';
+    rG.fillRect(px(0) - 3, y, 6, 14);
+  }
 
   // 4. Directional Highway Guidance Arrows stenciled in lanes
   const drawArrow = (x, y) => {
-    g.fillStyle = 'rgba(240, 243, 246, 0.85)';
+    g.fillStyle = 'rgba(246, 248, 251, 0.88)';
     g.beginPath();
     g.moveTo(x, y - 55);
     g.lineTo(x - 18, y - 20);
@@ -237,7 +247,7 @@ function createRealisticRoadTextures() {
     g.lineTo(x + 18, y - 20);
     g.closePath();
     g.fill();
-    rG.fillStyle = '#606060';
+    rG.fillStyle = '#686868';
     rG.fill();
   };
   drawArrow(px(1.5), 1024);
@@ -247,12 +257,12 @@ function createRealisticRoadTextures() {
 
   // 5. Stenciled Speed Limit "120"
   g.font = 'bold 44px sans-serif';
-  g.fillStyle = 'rgba(240, 243, 246, 0.75)';
+  g.fillStyle = 'rgba(246, 248, 251, 0.78)';
   g.textAlign = 'center';
   g.fillText('120', px(4.5), 1450);
 
-  // 6. Realistic braking skid marks
-  g.strokeStyle = 'rgba(8, 8, 10, 0.35)';
+  // 6. Realistic highway braking skid marks
+  g.strokeStyle = 'rgba(8, 9, 12, 0.32)';
   g.lineWidth = 10;
   g.beginPath();
   g.moveTo(px(4.5 - 0.85), 650);
@@ -265,18 +275,17 @@ function createRealisticRoadTextures() {
 
   const map = new THREE.CanvasTexture(c);
   map.wrapS = THREE.ClampToEdgeWrapping; map.wrapT = THREE.RepeatWrapping;
-  map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  map.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
   map.colorSpace = THREE.SRGBColorSpace;
-
-  const bumpMap = new THREE.CanvasTexture(bC);
-  bumpMap.wrapS = THREE.ClampToEdgeWrapping; bumpMap.wrapT = THREE.RepeatWrapping;
-  bumpMap.anisotropy = 4;
+  map.generateMipmaps = true;
 
   const roughnessMap = new THREE.CanvasTexture(rC);
   roughnessMap.wrapS = THREE.ClampToEdgeWrapping; roughnessMap.wrapT = THREE.RepeatWrapping;
-  roughnessMap.anisotropy = 4;
+  roughnessMap.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+  roughnessMap.generateMipmaps = true;
 
-  return { map, bumpMap, roughnessMap };
+  return { map, roughnessMap };
+}
 }
 
 // =====================================================================
@@ -597,7 +606,8 @@ function makeRealisticFerrari(color, isPlayer = false) {
     metalness: 0.15,
     roughness: 0.04,
     transparent: true,
-    opacity: 0.72,
+    opacity: 0.28,
+    depthWrite: false,
     clearcoat: 1.0,
     clearcoatRoughness: 0.02,
   });
@@ -632,6 +642,7 @@ function makeRealisticFerrari(color, isPlayer = false) {
   if (leds) leds.material = new THREE.MeshBasicMaterial({ color: 0xd8eeff });
 
   const steeringWheel = carModel.getObjectByName('steering_wheel');
+  const initialSteeringQ = steeringWheel ? steeringWheel.quaternion.clone() : null;
 
   carModel.traverse(child => {
     if (child.isMesh) {
@@ -652,7 +663,7 @@ function makeRealisticFerrari(color, isPlayer = false) {
     w.rotation.order = 'YXZ';
   });
 
-  // Baked ambient occlusion shadow
+  // Baked ambient occlusion shadow (resting above road at y = 0.025 to prevent z-fighting)
   const shadowGeo = new THREE.PlaneGeometry(2.62, 5.2);
   const shadowMat = new THREE.MeshBasicMaterial({
     map: aoTex,
@@ -663,7 +674,7 @@ function makeRealisticFerrari(color, isPlayer = false) {
   });
   const shadow = new THREE.Mesh(shadowGeo, shadowMat);
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.018;
+  shadow.position.y = 0.025;
   shadow.renderOrder = 2;
   root.add(shadow);
 
@@ -707,6 +718,7 @@ function makeRealisticFerrari(color, isPlayer = false) {
     bodyMat,
     brakeMat,
     steeringWheel,
+    initialSteeringQ,
     isRealisticFerrari: true,
     halfL: 2.3,
     halfW: 1.1,
@@ -737,6 +749,8 @@ function upgradePlayerToFerrari() {
   scene.remove(oldRoot);
   player = makeRealisticFerrari(playerColor, true);
   Object.assign(player, savedState);
+  player.root.position.set(player.x, roadY(player.z), player.z);
+  player.root.rotation.set(0, player.heading, 0);
   scene.add(player.root);
   console.log('Player upgraded to realistic Ferrari 458 Italia!');
 }
@@ -956,11 +970,9 @@ function buildWorld() {
   const roadTex = createRealisticRoadTextures();
   roadMat = new THREE.MeshStandardMaterial({
     map: roadTex.map,
-    bumpMap: roadTex.bumpMap,
-    bumpScale: 0.035,
     roughnessMap: roadTex.roughnessMap,
-    roughness: 0.85,
-    metalness: 0.04,
+    roughness: 0.86,
+    metalness: 0.05,
   });
 
   grassMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1, color: '#b7c98f' });
@@ -1075,18 +1087,30 @@ function buildWorld() {
     archList.push({ z: -1e9, group: g });
   }
 
-  // Distant mountains
+  // Distant mountain ranges (Layered alpine ridges and snowy massifs)
   mountains = new THREE.Group();
-  const mMat = new THREE.MeshStandardMaterial({ color: '#6a7a8f', roughness: 1, flatShading: true, fog: false });
-  const snowMat = new THREE.MeshStandardMaterial({ color: '#f2f2f5', roughness: 0.8, flatShading: true, fog: false });
-  for (let i = 0; i < 26; i++) {
-    const a = (i / 26) * Math.PI * 2 + Math.random() * 0.2;
-    const h = 120 + Math.random() * 200, r = 150 + Math.random() * 150;
-    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7, 1), mMat);
-    const d = 900 + Math.random() * 200;
-    m.position.set(Math.cos(a) * d, h / 2 - 30, Math.sin(a) * d);
-    const s = new THREE.Mesh(new THREE.ConeGeometry(r * 0.3, h * 0.3, 7, 1), snowMat); s.position.y = h * 0.35 + 0.5;
-    m.add(s); mountains.add(m);
+  const mMat1 = new THREE.MeshStandardMaterial({ color: '#556578', roughness: 0.95, flatShading: true, fog: false });
+  const mMat2 = new THREE.MeshStandardMaterial({ color: '#3d4d60', roughness: 0.95, flatShading: true, fog: false });
+  const snowMat = new THREE.MeshStandardMaterial({ color: '#eef2f8', roughness: 0.8, flatShading: true, fog: false });
+
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2 + (Math.random() - 0.5) * 0.15;
+    const isDistant = i % 2 === 0;
+    const d = isDistant ? (1050 + Math.random() * 250) : (750 + Math.random() * 180);
+    const h = (isDistant ? 180 : 110) + Math.random() * (isDistant ? 220 : 120);
+    const r = (isDistant ? 180 : 120) + Math.random() * 120;
+    const segs = 6 + ((Math.random() * 3) | 0);
+    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, segs, 1), isDistant ? mMat1 : mMat2);
+    m.position.set(Math.cos(a) * d, h * 0.45 - 25, Math.sin(a) * d);
+    m.rotation.y = Math.random() * Math.PI;
+
+    if (h > 150) {
+      // Alpine snow cap
+      const s = new THREE.Mesh(new THREE.ConeGeometry(r * 0.32, h * 0.32, segs, 1), snowMat);
+      s.position.y = h * 0.34 + 0.2;
+      m.add(s);
+    }
+    mountains.add(m);
   }
   scene.add(mountains);
   makeParticles();
@@ -1138,13 +1162,17 @@ function buildChunk(idx) {
         // 3 vertices per row: gutter lip, curb bevel, curb back
         cp.push(
           ex, y + 0.01, z,
-          ex + side * 0.25, y + 0.14, z,
-          ex + side * 0.45, y + 0.15, z
+          ex + side * 0.28, y + 0.15, z,
+          ex + side * 0.50, y + 0.16, z
         );
         cuv.push(0, z / 4, 0.5, z / 4, 1, z / 4);
         if (r) {
           const a = (r - 1) * 3, b = r * 3;
-          ci.push(a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2);
+          if (side > 0) {
+            ci.push(a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2);
+          } else {
+            ci.push(a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1);
+          }
         }
       }
       const cg = new THREE.BufferGeometry();
@@ -1197,7 +1225,11 @@ function buildChunk(idx) {
         if (r) {
           const a = (r - 1) * 5, b = r * 5;
           for (let s = 0; s < 4; s++) {
-            ind.push(a + s, b + s, a + s + 1, a + s + 1, b + s, b + s + 1);
+            if (side > 0) {
+              ind.push(a + s, b + s, a + s + 1, a + s + 1, b + s, b + s + 1);
+            } else {
+              ind.push(a + s, a + s + 1, b + s, a + s + 1, b + s + 1, b + s);
+            }
           }
         }
         dummy.position.set(bx + side * 0.12, y + 0.48, z); dummy.updateMatrix();
@@ -1208,6 +1240,7 @@ function buildChunk(idx) {
       g.setIndex(ind); g.computeVertexNormals();
       const m = new THREE.Mesh(g, railMat); m.castShadow = true; group.add(m);
     }
+    posts.instanceMatrix.needsUpdate = true;
     posts.castShadow = true; group.add(posts);
   }
 
@@ -1385,6 +1418,8 @@ function resetGame() {
   player = makeCar(playerColor, true);
   scene.add(player.root);
   Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2 });
+  player.root.position.set(player.x, roadY(player.z), player.z);
+  player.root.rotation.set(0, player.heading, 0);
   Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, nextPad: 700, over: false, overTimer: 0, runEnded: false, revived: false });
   gameTime = 0;
   shake = 0;
@@ -1658,11 +1693,16 @@ function updatePlayer(dt) {
   const pitch = -Math.atan(roadDY(p.z)) + (acc < -10 ? 0.02 : throttle ? -0.012 : 0);
   p.root.rotation.set(pitch, p.heading, -p.steer * Math.min(1, av / 50) * 0.04, 'YXZ');
   p.wheels.forEach((w, i) => {
-    w.rotation.x -= p.v * dt / 0.36;
+    w.rotation.x -= p.v * dt / 0.358;
     if (i < 2) w.rotation.y = p.steer * 0.45;
   });
   if (p.steeringWheel) {
-    p.steeringWheel.rotation.z = p.steer * 2.2;
+    if (p.initialSteeringQ) {
+      const steerQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -p.steer * 2.2);
+      p.steeringWheel.quaternion.multiplyQuaternions(p.initialSteeringQ, steerQ);
+    } else {
+      p.steeringWheel.rotation.z = p.steer * 2.2;
+    }
   }
   p.brakeMat.color.setHex(down || hand ? 0xff1010 : 0x550000);
 
@@ -1763,43 +1803,76 @@ function popup(text, color) {
 }
 
 // =====================================================================
-//  CAMERA
+//  CAMERA (Featuring 1st-Person Cockpit Interior View)
 // =====================================================================
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
-const CAM_NAMES = ['CHASE', 'LONG SHOT', 'HOOD', 'CINEMATIC', 'SKY CAM', 'REAR VIEW'];
+const CAM_NAMES = ['CHASE', 'COCKPIT', 'HOOD', 'LONG SHOT', 'CINEMATIC', 'SKY CAM', 'REAR VIEW'];
 function updateCamera(dt, snap = false) {
   const p = player, h = p.heading - p.spin * 0.1;
   const fwd = new THREE.Vector3(Math.sin(h), 0, Math.cos(h));
+  const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
   const y = roadY(p.z);
   let tp, tl;
-  if (camMode === 0) { tp = new THREE.Vector3(p.x, y + 2.6, p.z).addScaledVector(fwd, -6.8); tl = new THREE.Vector3(p.x, y + 1.1, p.z).addScaledVector(fwd, 6); }
-  else if (camMode === 1) { tp = new THREE.Vector3(p.x, y + 4.5, p.z).addScaledVector(fwd, -11); tl = new THREE.Vector3(p.x, y + 1, p.z).addScaledVector(fwd, 10); }
-  else if (camMode === 2) { tp = new THREE.Vector3(p.x, y + 1.1, p.z).addScaledVector(fwd, 0.2); tl = new THREE.Vector3(p.x, y + 1.0, p.z).addScaledVector(fwd, 20); }
-  else if (camMode === 3) {
-    const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
-    tp = new THREE.Vector3(p.x, y + 0.7, p.z).addScaledVector(fwd, 4.5).addScaledVector(side, 5.2);
+  if (camMode === 0) {
+    // CHASE
+    tp = new THREE.Vector3(p.x, y + 2.5, p.z).addScaledVector(fwd, -6.6);
+    tl = new THREE.Vector3(p.x, y + 1.1, p.z).addScaledVector(fwd, 6);
+  } else if (camMode === 1) {
+    // COCKPIT / INTERIOR VIEW: Inside cabin behind steering wheel looking out windshield
+    const headBob = Math.sin(gameTime * 20) * Math.min(0.012, Math.abs(p.v) * 0.00025);
+    tp = new THREE.Vector3(p.x, y + 1.07 + headBob, p.z)
+      .addScaledVector(fwd, -0.15)
+      .addScaledVector(side, 0.35);
+    tl = tp.clone()
+      .addScaledVector(fwd, 32)
+      .addScaledVector(side, -p.steer * 0.9)
+      .add(new THREE.Vector3(0, -0.06, 0));
+  } else if (camMode === 2) {
+    // HOOD
+    tp = new THREE.Vector3(p.x, y + 1.05, p.z).addScaledVector(fwd, 0.4);
+    tl = new THREE.Vector3(p.x, y + 0.95, p.z).addScaledVector(fwd, 24);
+  } else if (camMode === 3) {
+    // LONG SHOT
+    tp = new THREE.Vector3(p.x, y + 4.8, p.z).addScaledVector(fwd, -11.5);
+    tl = new THREE.Vector3(p.x, y + 1.0, p.z).addScaledVector(fwd, 10);
+  } else if (camMode === 4) {
+    // CINEMATIC SIDE
+    tp = new THREE.Vector3(p.x, y + 0.8, p.z).addScaledVector(fwd, 4.5).addScaledVector(side, 5.2);
     tl = new THREE.Vector3(p.x, y + 0.9, p.z).addScaledVector(fwd, 2);
-  }
-  else if (camMode === 4) {
+  } else if (camMode === 5) {
+    // SKY CAM
     tp = new THREE.Vector3(p.x, y + 42, p.z - 7);
     tl = new THREE.Vector3(p.x, y, p.z + 3);
-  }
-  else {
+  } else {
+    // REAR VIEW
     tp = new THREE.Vector3(p.x, y + 1.7, p.z).addScaledVector(fwd, 5.5);
     tl = new THREE.Vector3(p.x, y + 1.0, p.z).addScaledVector(fwd, -30);
   }
-  if (tp.y < terrainY(tp.x, tp.z) + 0.5) tp.y = terrainY(tp.x, tp.z) + 0.5;
-  const k = snap ? 1 : Math.min(1, dt * (camMode === 2 ? 30 : camMode >= 4 ? 14 : 7));
-  camPos.lerp(tp, k); camLook.lerp(tl, snap ? 1 : Math.min(1, dt * 12));
+
+  if (camMode !== 1 && tp.y < terrainY(tp.x, tp.z) + 0.5) tp.y = terrainY(tp.x, tp.z) + 0.5;
+  const k = snap ? 1 : Math.min(1, dt * (camMode === 1 ? 35 : camMode === 2 ? 30 : camMode >= 5 ? 14 : 8));
+  camPos.lerp(tp, k);
+  camLook.lerp(tl, snap ? 1 : Math.min(1, dt * (camMode === 1 ? 30 : 12)));
   camera.position.copy(camPos);
-  if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.4; camera.position.y += (Math.random() - 0.5) * shake * 0.3; shake = Math.max(0, shake - dt * 2.5); }
+
+  if (shake > 0) {
+    const sPow = (camMode === 1 ? 0.25 : 0.4) * shake;
+    camera.position.x += (Math.random() - 0.5) * sPow;
+    camera.position.y += (Math.random() - 0.5) * sPow * 0.75;
+    shake = Math.max(0, shake - dt * 2.5);
+  }
   if (p.nitroOn) camera.position.x += (Math.random() - 0.5) * 0.05;
   camera.lookAt(camLook);
-  const fov = 60 + Math.min(22, Math.abs(p.v) * 0.18) + (p.nitroOn ? 6 : 0);
-  camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+
+  const baseFov = camMode === 1 ? 68 : 60;
+  const fov = baseFov + Math.min(22, Math.abs(p.v) * 0.18) + (p.nitroOn ? 6 : 0);
+  camera.fov += (fov - camera.fov) * Math.min(1, dt * 3.5);
+  camera.updateProjectionMatrix();
+
   sky.position.copy(camera.position);
   mountains.position.set(camera.position.x, 0, camera.position.z);
-  sun.position.set(p.x + 30, y + 60, p.z - 20); sun.target.position.set(p.x, y, p.z + 10);
+  sun.position.set(p.x + 30, y + 60, p.z - 20);
+  sun.target.position.set(p.x, y, p.z + 10);
 }
 
 // =====================================================================
@@ -1862,7 +1935,7 @@ function beginRace() {
   audio.init(musicData); audio.resume();
   ['menu', 'over', 'pause'].forEach(s => el(s).classList.add('hidden'));
   el('hud').classList.remove('hidden');
-  if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0) el('touch').classList.remove('hidden');
+  el('touch').classList.remove('hidden'); // Always display on-screen HUD buttons
   resetGame();
   updateCamera(0.016, true);
   state = 'play';
@@ -1956,26 +2029,94 @@ el('reviveBtn').onclick = () => {
 
 addEventListener('keydown', e => {
   keys[e.code] = true;
+  // Visual feedback on HUD buttons for keyboard presses
+  if (e.code === 'KeyA' || e.code === 'ArrowLeft') document.querySelector('[data-k="left"]')?.classList.add('pressed');
+  if (e.code === 'KeyD' || e.code === 'ArrowRight') document.querySelector('[data-k="right"]')?.classList.add('pressed');
+  if (e.code === 'KeyW' || e.code === 'ArrowUp') document.querySelector('[data-k="gas"]')?.classList.add('pressed');
+  if (e.code === 'KeyS' || e.code === 'ArrowDown') document.querySelector('[data-k="brake"]')?.classList.add('pressed');
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') document.querySelector('[data-k="nitro"]')?.classList.add('pressed');
+
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
-  if (e.code === 'KeyC') { camMode = (camMode + 1) % CAM_NAMES.length; popup('CAM: ' + CAM_NAMES[camMode], '#8fe3ff'); }
+  if (e.code === 'KeyC') {
+    camMode = (camMode + 1) % CAM_NAMES.length;
+    popup('CAM: ' + CAM_NAMES[camMode] + (camMode === 1 ? ' 🏎️' : ''), camMode === 1 ? '#b388ff' : '#8fe3ff');
+  }
   if (e.code === 'KeyM') audio.toggleMusic();
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
   if (e.code === 'Enter' && (state === 'menu' || state === 'over')) startGame();
 });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'KeyA' || e.code === 'ArrowLeft') document.querySelector('[data-k="left"]')?.classList.remove('pressed');
+  if (e.code === 'KeyD' || e.code === 'ArrowRight') document.querySelector('[data-k="right"]')?.classList.remove('pressed');
+  if (e.code === 'KeyW' || e.code === 'ArrowUp') document.querySelector('[data-k="gas"]')?.classList.remove('pressed');
+  if (e.code === 'KeyS' || e.code === 'ArrowDown') document.querySelector('[data-k="brake"]')?.classList.remove('pressed');
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') document.querySelector('[data-k="nitro"]')?.classList.remove('pressed');
+});
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (state === 'play') togglePause(); });
+
+// Touch & Mouse button controls
+function wireHudButton(btn, onDown, onUp) {
+  let isDown = false;
+  const press = e => {
+    if (e && e.cancelable) e.preventDefault();
+    if (isDown) return;
+    isDown = true;
+    btn.classList.add('pressed');
+    onDown();
+  };
+  const release = e => {
+    if (e && e.cancelable) e.preventDefault();
+    if (!isDown) return;
+    isDown = false;
+    btn.classList.remove('pressed');
+    onUp();
+  };
+  btn.addEventListener('pointerdown', press);
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', release);
+  btn.addEventListener('pointerleave', release);
+  btn.addEventListener('touchstart', press, { passive: false });
+  btn.addEventListener('touchend', release, { passive: false });
+  btn.addEventListener('touchcancel', release, { passive: false });
+  btn.addEventListener('mousedown', press);
+  btn.addEventListener('mouseup', release);
+  btn.addEventListener('mouseleave', release);
+}
 
 document.querySelectorAll('#touch button').forEach(b => {
   const k = b.dataset.k;
-  if (k === 'cam') {
-    b.addEventListener('touchstart', e => { e.preventDefault(); camMode = (camMode + 1) % CAM_NAMES.length; popup('CAM: ' + CAM_NAMES[camMode], '#8fe3ff'); }, { passive: false });
+  if (k === 'cockpit') {
+    wireHudButton(b, () => {
+      if (camMode === 1) {
+        camMode = 0; // Chase view
+        popup('CAM: CHASE VIEW', '#8fe3ff');
+      } else {
+        camMode = 1; // Cockpit interior
+        popup('CAM: COCKPIT INTERIOR 🏎️', '#b388ff');
+      }
+    }, () => {});
     return;
   }
-  const set = v => e => { e.preventDefault(); keys[k] = v; };
-  b.addEventListener('touchstart', set(true), { passive: false });
-  b.addEventListener('touchend', set(false), { passive: false });
-  b.addEventListener('touchcancel', set(false), { passive: false });
+  if (k === 'cam') {
+    wireHudButton(b, () => {
+      camMode = (camMode + 1) % CAM_NAMES.length;
+      popup('CAM: ' + CAM_NAMES[camMode] + (camMode === 1 ? ' 🏎️' : ''), camMode === 1 ? '#b388ff' : '#00e5ff');
+    }, () => {});
+    return;
+  }
+  if (k === 'KeyH') {
+    wireHudButton(b, () => {
+      keys.KeyH = true;
+      audio.horn();
+      popup('📢 BEEP!', '#ffd23f');
+    }, () => {
+      keys.KeyH = false;
+    });
+    return;
+  }
+  wireHudButton(b, () => { keys[k] = true; }, () => { keys[k] = false; });
 });
 
 document.addEventListener('click', e => {
