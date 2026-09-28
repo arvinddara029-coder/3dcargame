@@ -3,9 +3,11 @@
 Endless 3D highway racing game (Three.js, browser me chalta hai).
 
 ## Features
-- Unlimited procedurally generated curvy + hilly highway (superwide 8-lane road, 4 lanes each way, guard rails, street lamps, trees, mountains, sunset sky)
-- Fast-start lightweight 3D supercar (paint colour choose karo), with shared geometry so traffic stays smooth
-- Oncoming traffic (left lanes) + same-direction traffic, trucks & buses, lane changes, AI braking
+- **Realistic 3D Supercar**: High-detail Ferrari 458 Italia 3D model (Sketchfab / Three.js) with automotive clearcoat paint customization, metallic alloy rims, rubber tires, Brembo calipers, xenon headlights, glowing brake lights, turning interior steering wheel, and baked ambient occlusion contact shadow
+- **Realistic PBR Highway**: High-resolution procedural asphalt with aggregate stones, bump map for physical micro-depth, roughness map capturing specular sky reflections on polished tire tracks, thermoplastic painted lane dashes and edge lines, grooved shoulder rumble strips, 3D bevelled concrete curbs, 3D corrugated W-beam guard rails, and New Jersey concrete median barrier
+- **Realistic Roadside Assets**: Compound 5-tier layered pine trees with natural foliage silhouettes, modern cobra-head LED highway streetlights, overhead steel box-truss gantry signs with blinking amber warning beacons, and weighted high-visibility traffic cones and hazard barricades
+- **Varied Realistic Traffic**: Sports coupes, luxury executive sedans, modern SUVs, heavy-duty semi-trucks with corrugated trailers and DOT-C2 reflective tape, and touring coach buses
+- Unlimited procedurally generated curvy + hilly highway (superwide 8-lane road, 4 lanes each way, mountains, sunset sky with HDR environment lighting)
 - Challenges: roadworks barriers + cones, near-miss bonus, score multiplier, health/damage, wrong-way warning, centre-median rumble (grinding the concrete divider costs health)
 - Landmarks: spinning wind turbines on the hills + glowing gantry arches with blinking lamps
 - Rewarded ad revive: watch a short ad after crashing for 1 extra life (once per run)
