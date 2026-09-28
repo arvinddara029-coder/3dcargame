@@ -18,6 +18,9 @@ button.big{font-size:22px;padding:14px 48px;background:linear-gradient(90deg,#ff
 .loadbar{width:min(420px,80vw);height:10px;background:#222;border-radius:5px;overflow:hidden;box-shadow:0 0 18px rgba(255,150,0,.18)}#loadfill{height:100%;width:0;background:linear-gradient(90deg,#ff6a00,#ffd23f,#fff0a3);transition:width .2s}.loadnote{max-width:330px;font-size:12px;line-height:1.5;opacity:.62}#loadingRetry{margin-top:4px}
 .final{display:grid;grid-template-columns:repeat(2,160px);gap:12px}.final div{background:rgba(255,255,255,.07);padding:12px;border-radius:8px}.final span{display:block;font-size:12px;opacity:.7;letter-spacing:2px;text-transform:uppercase}.final b{font-size:26px}
 #newbest{color:#ffd23f;font-weight:900;letter-spacing:3px;animation:pulse 1s infinite}
+button.revive{font-size:20px;padding:14px 36px;background:linear-gradient(90deg,#0097a7,#00e5ff);border:none;color:#03252b;box-shadow:0 0 22px rgba(0,229,255,.55);animation:revivePulse 1.4s infinite}
+button.revive:disabled{filter:grayscale(.8);animation:none;opacity:.6}
+@keyframes revivePulse{50%{transform:scale(1.05);box-shadow:0 0 38px rgba(0,229,255,.85)}}
 @keyframes pulse{50%{opacity:.4}}
 
 #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
@@ -37,7 +40,8 @@ button.big{font-size:22px;padding:14px 48px;background:linear-gradient(90deg,#ff
 #warning{position:absolute;top:40%;width:100%;text-align:center;font-size:48px;font-weight:900;color:#ff3b3b;text-shadow:0 0 20px #f00;animation:pulse .5s infinite}
 #help{position:absolute;bottom:8px;left:12px;font-size:11px;opacity:.55}
 #flash{position:fixed;inset:0;pointer-events:none;background:#fff;opacity:0;z-index:15;transition:opacity .3s}
-#touch{position:fixed;inset:auto 0 0 0;height:160px;z-index:12;display:flex;justify-content:space-between;padding:16px;pointer-events:none}
+#touch{position:fixed;inset:auto 0 0 0;height:160px;z-index:12;display:flex;justify-content:space-between;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));pointer-events:none}
 #touch button{pointer-events:auto;width:78px;height:78px;border-radius:50%;font-size:22px;background:rgba(255,255,255,.15);margin:4px}
 #touch .tright button{font-size:13px}#touch .g{background:rgba(60,255,120,.3)}#touch .b{background:rgba(255,60,60,.3)}#touch .n{background:rgba(0,200,255,.35)}
+#touch .tleft{flex-wrap:wrap;max-width:190px}#touch button.mini{width:56px;height:56px;font-size:24px;margin:2px}#touch .h{background:rgba(255,190,60,.3)}#touch .cam{background:rgba(180,120,255,.35)}
 @media (max-width:760px){#topbar .stat:nth-child(4){display:none}.stat{min-width:78px;padding:4px 8px}.stat span:last-child{font-size:16px}#gauge{width:150px;height:150px;bottom:170px}#minimap{display:none}#help{display:none}#bars{width:130px;top:70px}}

@@ -8,7 +8,10 @@ export class GameAudio {
 
   init(musicBuffer) {
     if (this.ctx) return;
-    const ctx = (this.ctx = new (window.AudioContext || window.webkitAudioContext)());
+    const AC = window.AudioContext || window.webkitAudioContext;
+    // No Web Audio support: run the game silently instead of crashing startGame().
+    if (!AC) return;
+    const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
     this.master.gain.value = 0.8;
     const comp = ctx.createDynamicsCompressor();
@@ -196,6 +199,14 @@ export class GameAudio {
   toggleMusic() {
     this.musicOn = !this.musicOn;
     if (this.musicG) this._set(this.musicG.gain, this.musicOn ? 0.28 : 0, 0.2);
+  }
+
+  // Ducks the entire mix on the master bus while an ad is playing and
+  // restores it afterwards (a CrazyGames requirement: no game audio during ads).
+  setMuted(muted) {
+    this.adMuted = muted;
+    if (!this.ctx || !this.master) return;
+    this._set(this.master.gain, muted ? 0 : 0.8, 0.03);
   }
   suspend() { this.ctx && this.ctx.suspend(); }
   resume() { this.ctx && this.ctx.resume(); }

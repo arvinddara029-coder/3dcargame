@@ -28,12 +28,12 @@
   <canvas id="gauge" width="260" height="260"></canvas>
   <div id="popups"></div>
   <div id="warning" class="hidden">WRONG WAY!</div>
-  <div id="help">W/↑ Gas · S/↓ Brake · A/D Steer · SPACE Handbrake · SHIFT Nitro · H Horn · C Camera · M Music · P Pause</div>
+  <div id="help">W/↑ Gas · S/↓ Brake · A/D Steer · SPACE Handbrake · SHIFT Nitro · H Horn · C Camera (6 views) · M Music · P Pause</div>
 </div>
 
 <!-- Touch controls -->
 <div id="touch" class="hidden">
-  <div class="tleft"><button data-k="left">◀</button><button data-k="right">▶</button></div>
+  <div class="tleft"><button data-k="left">◀</button><button data-k="right">▶</button><button data-k="KeyH" class="mini h">📢</button><button data-k="cam" class="mini cam">📷</button></div>
   <div class="tright"><button data-k="nitro" class="n">N₂O</button><button data-k="brake" class="b">BRAKE</button><button data-k="gas" class="g">GAS</button></div>
 </div>
 
@@ -58,9 +58,9 @@
     <div><b>W / ↑</b> Accelerate</div><div><b>S / ↓</b> Brake / Reverse</div>
     <div><b>A D / ← →</b> Steer</div><div><b>SPACE</b> Handbrake drift</div>
     <div><b>SHIFT</b> Nitro boost</div><div><b>H</b> Horn</div>
-    <div><b>C</b> Change camera</div><div><b>M</b> Music on/off</div>
+    <div><b>C</b> Camera &middot; 6 views</div><div><b>M</b> Music on/off</div>
   </div>
-  <p class="tip">Tip: Oncoming lane (left side) me drive karne par 2x points! Near miss = bonus.</p>
+  <p class="tip">Tip: Oncoming lane (right side) me drive karne par 2x points! Near miss = bonus.</p>
 </div>
 
 <div id="pause" class="screen hidden"><h1>PAUSED</h1><button id="resumeBtn" class="big">RESUME</button><button id="quitBtn">MAIN MENU</button></div>
@@ -74,10 +74,14 @@
     <div><span>Near Misses</span><b id="fNear">0</b></div>
   </div>
   <p id="newbest" class="hidden">★ NEW BEST SCORE ★</p>
+  <button id="reviveBtn" class="revive hidden">&#127881; WATCH AD &mdash; 1 EXTRA LIFE</button>
   <button id="againBtn" class="big">RACE AGAIN</button><button id="menuBtn">MAIN MENU</button>
 </div>
 
 <div id="flash"></div>
-<script type="module" src="js/game.js"></script>
+<!-- CrazyGames SDK (used for ads only). Loaded once, before the game code.
+     The game boots and runs normally even when this script is blocked. -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+<script type="module" src="js/game.js?v=8lane"></script>
 </body>
 </html>
