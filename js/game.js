@@ -90,6 +90,9 @@ const sun = new THREE.DirectionalLight('#ffd9a8', 2.6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(LOW_POWER_DEVICE ? 1024 : 2048, LOW_POWER_DEVICE ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 250 });
+// Changing ortho bounds after construction requires a manual projection update,
+// otherwise the shadow map keeps the default ±5 unit frustum and most shadows vanish.
+sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
@@ -190,18 +193,23 @@ function optionalAssetError(name, error) {
 }
 
 function loadOptionalAssets() {
-  texLoader.load('assets/grass.jpg', texture => {
-    grassTex = configureGrass(texture);
-    if (grassMat) {
-      grassMat.map = grassTex;
-      grassMat.needsUpdate = true;
-    }
-  }, undefined, error => optionalAssetError('grass texture', error));
+  try {
+    texLoader.load('assets/grass.jpg', texture => {
+      grassTex = configureGrass(texture);
+      if (grassMat) {
+        grassMat.map = grassTex;
+        grassMat.needsUpdate = true;
+      }
+    }, undefined, error => optionalAssetError('grass texture', error));
 
-  new RGBELoader().load('assets/sky.hdr', hdr => {
-    hdr.mapping = THREE.EquirectangularReflectionMapping;
-    scene.environment = hdr;
-  }, undefined, error => optionalAssetError('environment map', error));
+    new RGBELoader().load('assets/sky.hdr', hdr => {
+      hdr.mapping = THREE.EquirectangularReflectionMapping;
+      scene.environment = hdr;
+    }, undefined, error => optionalAssetError('environment map', error));
+  } catch (error) {
+    // A throwing loader must never take the boot path down with it.
+    optionalAssetError('texture/environment loader', error);
+  }
 
   // Music never blocks the race. Abort it after a while when the browser supports it.
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -633,6 +641,7 @@ function resetGame() {
   Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2 });
   Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, over: false, overTimer: 0 });
   gameTime = 0;
+  shake = 0;
   treeData.forEach(t => t.z = -1e9); lampData.forEach(l => l.z = -1e9);
   updateChunks(0); updateScenery(0);
 }
@@ -707,15 +716,30 @@ function updateTraffic(dt) {
 // ----- roadworks (obstacles) & pickups -----
 const coneGeo = new THREE.ConeGeometry(0.28, 0.75, 12); coneGeo.translate(0, 0.375, 0);
 const coneMat = new THREE.MeshStandardMaterial({ color: '#ff5a00', roughness: 0.5 });
-function barrierMesh() {
-  const g = new THREE.Group();
+let barrierAssets = null;
+function getBarrierAssets() {
+  // Built once: the striped canvas texture was previously re-created (and
+  // leaked) for every single barrier spawned.
+  if (barrierAssets) return barrierAssets;
   const c = document.createElement('canvas'); c.width = 256; c.height = 32; const x = c.getContext('2d');
   for (let i = 0; i < 16; i++) { x.fillStyle = i % 2 ? '#fff' : '#e21'; x.beginPath(); x.moveTo(i * 16, 0); x.lineTo(i * 16 + 16, 0); x.lineTo(i * 16, 32); x.lineTo(i * 16 - 16, 32); x.fill(); }
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const board = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.5, 0.12), new THREE.MeshStandardMaterial({ map: tex, emissive: '#330000' }));
+  barrierAssets = {
+    boardGeo: new THREE.BoxGeometry(3.4, 0.5, 0.12),
+    boardMat: new THREE.MeshStandardMaterial({ map: tex, emissive: '#330000' }),
+    legGeo: new THREE.BoxGeometry(0.12, 1.2, 0.8),
+    lampGeo: new THREE.SphereGeometry(0.12, 8, 8),
+    lampMat: new THREE.MeshBasicMaterial({ color: '#ffae00' }),
+  };
+  return barrierAssets;
+}
+function barrierMesh() {
+  const a = getBarrierAssets();
+  const g = new THREE.Group();
+  const board = new THREE.Mesh(a.boardGeo, a.boardMat);
   board.position.y = 1.0; board.castShadow = true; g.add(board);
-  for (const s of [-1.5, 1.5]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.2, 0.8), postMat); l.position.set(s, 0.6, 0); g.add(l); }
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshBasicMaterial({ color: '#ffae00' }));
+  for (const s of [-1.5, 1.5]) { const l = new THREE.Mesh(a.legGeo, postMat); l.position.set(s, 0.6, 0); g.add(l); }
+  const lamp = new THREE.Mesh(a.lampGeo, a.lampMat);
   lamp.position.set(0, 1.4, 0); g.add(lamp); g.userData.lamp = lamp;
   return g;
 }
@@ -733,15 +757,29 @@ function spawnRoadworks(z) {
     obstacles.push({ mesh: m, z: z + d, lat, kind: 'cone', halfL: 0.3, halfW: 0.3, hit: false, vy: 0, vx: 0, vz: 0, y: 0 });
   }
 }
+let pickupAssets = null;
+function getPickupAssets() {
+  // Shared geometry/materials — spawning used to allocate new ones per pickup.
+  if (pickupAssets) return pickupAssets;
+  pickupAssets = {
+    nitroGeo: new THREE.CylinderGeometry(0.35, 0.35, 1.1, 16),
+    repairGeo: new THREE.BoxGeometry(0.8, 0.8, 0.8),
+    nitroMat: new THREE.MeshStandardMaterial({ color: '#00b7ff', emissive: '#0066ff', emissiveIntensity: 1.2, metalness: 0.5, roughness: 0.3 }),
+    repairMat: new THREE.MeshStandardMaterial({ color: '#22dd55', emissive: '#11aa33', emissiveIntensity: 1.2, metalness: 0.5, roughness: 0.3 }),
+    ringGeo: new THREE.TorusGeometry(0.9, 0.06, 8, 32),
+    nitroRingMat: new THREE.MeshBasicMaterial({ color: '#7fe3ff' }),
+    repairRingMat: new THREE.MeshBasicMaterial({ color: '#9dff9d' }),
+  };
+  return pickupAssets;
+}
 function spawnPickup(z) {
   const nitro = Math.random() < 0.65;
-  const lat = LANES[(Math.random() * 4) | 0];
+  const a = getPickupAssets();
   const g = new THREE.Group();
-  const core = new THREE.Mesh(nitro ? new THREE.CylinderGeometry(0.35, 0.35, 1.1, 16) : new THREE.BoxGeometry(0.8, 0.8, 0.8),
-    new THREE.MeshStandardMaterial({ color: nitro ? '#00b7ff' : '#22dd55', emissive: nitro ? '#0066ff' : '#11aa33', emissiveIntensity: 1.2, metalness: 0.5, roughness: 0.3 }));
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 8, 32), new THREE.MeshBasicMaterial({ color: nitro ? '#7fe3ff' : '#9dff9d' }));
-  g.add(core, ring); scene.add(g);
-  pickups.push({ mesh: g, z, lat, kind: nitro ? 'nitro' : 'repair', taken: false });
+  g.add(new THREE.Mesh(nitro ? a.nitroGeo : a.repairGeo, nitro ? a.nitroMat : a.repairMat));
+  g.add(new THREE.Mesh(a.ringGeo, nitro ? a.nitroRingMat : a.repairRingMat));
+  scene.add(g);
+  pickups.push({ mesh: g, z, lat: LANES[(Math.random() * 4) | 0], kind: nitro ? 'nitro' : 'repair', taken: false });
 }
 
 function updateObstacles(dt) {
@@ -812,8 +850,8 @@ function updatePlayer(dt) {
   if (Math.abs(p.lat) > DRIVE_LIMIT) {
     const side = Math.sign(p.lat);
     p.lat = side * DRIVE_LIMIT; p.x = roadX(p.z) + p.lat;
-    rel = p.heading - ra;
-    if (Math.sign(rel) === -side * -1 || true) p.heading = ra + rel * 0.5 - side * 0.02;
+    // Bleed off the sideways heading component so the car settles along the rail.
+    p.heading = ra + (p.heading - ra) * 0.5 - side * 0.02;
     p.v *= Math.pow(0.55, dt);
     if (p.v > 8) {
       p.scrape = Math.min(1, p.v / 40);
@@ -1016,6 +1054,9 @@ function drawHUD() {
 //  FLOW
 // =====================================================================
 function startGame() {
+  // A menu button that was clicked keeps focus; pressing Enter afterwards would
+  // natively re-click the hidden button and silently restart the race.
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   audio.init(musicData); audio.resume();
   resetGame();
   updateCamera(0.016, true);
@@ -1062,6 +1103,7 @@ el('resumeBtn').onclick = togglePause; el('quitBtn').onclick = toMenu; el('menuB
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return; // ignore OS key-repeat for one-shot actions below
   if (e.code === 'KeyC') camMode = (camMode + 1) % 3;
   if (e.code === 'KeyM') audio.toggleMusic();
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
@@ -1071,8 +1113,18 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (state === 'play') togglePause(); });
 document.querySelectorAll('#touch button').forEach(b => {
   const k = b.dataset.k;
-  b.addEventListener('touchstart', e => { e.preventDefault(); keys[k] = true; if (k === 'gas') keys.gas = true; });
-  b.addEventListener('touchend', e => { e.preventDefault(); keys[k] = false; });
+  const set = v => e => { e.preventDefault(); keys[k] = v; };
+  b.addEventListener('touchstart', set(true), { passive: false });
+  b.addEventListener('touchend', set(false), { passive: false });
+  // If the OS cancels the touch (incoming call, notification shade, browser
+  // gesture), the button never sees touchend — release the key or it sticks.
+  b.addEventListener('touchcancel', set(false), { passive: false });
+});
+// Never leave focus on a menu button: a later Enter/Space would re-click it.
+document.addEventListener('click', e => {
+  const t = e.target;
+  const btn = t && t.closest ? t.closest('button') : null;
+  if (btn && btn.blur) btn.blur();
 });
 
 // =====================================================================
@@ -1119,7 +1171,8 @@ function loop() {
     mountains.position.set(camera.position.x, 0, camera.position.z);
     sun.position.set(player.x + 30, y + 60, player.z - 20); sun.target.position.set(player.x, y, player.z);
   } else if (state === 'over' || state === 'pause') {
-    // keep scene rendered
+    // keep scene rendered; fade engine/wind loops out so they don't drone forever
+    audio.update({ active: false, rpm: 900, throttle: 0, speed: 0, skid: 0, scrape: 0, nitro: false, horn: false });
   }
   renderer.render(scene, camera);
 }

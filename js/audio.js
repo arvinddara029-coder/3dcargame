@@ -8,7 +8,10 @@ export class GameAudio {
 
   init(musicBuffer) {
     if (this.ctx) return;
-    const ctx = (this.ctx = new (window.AudioContext || window.webkitAudioContext)());
+    const AC = window.AudioContext || window.webkitAudioContext;
+    // No Web Audio support: run the game silently instead of crashing startGame().
+    if (!AC) return;
+    const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
     this.master.gain.value = 0.8;
     const comp = ctx.createDynamicsCompressor();
