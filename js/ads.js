@@ -17,7 +17,7 @@
 //    never more often than CrazyGames' ~3-minute midgame interval.
 // =====================================================================
 
-const SDK_WAIT_TIMEOUT = 10;      // s — max wait for the SDK <script> to appear
+const SDK_WAIT_TIMEOUT = 2;       // s — max wait for the SDK <script> to appear
 const SDK_POLL_INTERVAL = 0.15;   // s — bounded poll, stops as soon as it exists
 const INIT_TIMEOUT = 10;          // s — cap on SDK.init()
 const INTERSTITIAL_MIN_GAP = 180; // s — CrazyGames enforces ~3 min between midgame ads

@@ -120,16 +120,15 @@ function createRealisticRoadTextures() {
     g.fillRect(0, y, W, h);
   }
 
-  // Smooth, anti-aliased stone aggregate speckling (no single-pixel sparkling noise)
-  g.fillStyle = 'rgba(235, 238, 242, 0.07)';
-  for (let i = 0; i < 12000; i++) {
-    const x = Math.random() * W, y = Math.random() * H, r = 1 + Math.random() * 2.2;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  // Fast, smooth aggregate speckling using fillRect (sub-millisecond execution, zero lag)
+  g.fillStyle = 'rgba(235, 238, 242, 0.08)';
+  for (let i = 0; i < 2500; i++) {
+    g.fillRect(Math.random() * W, Math.random() * H, 2, 2);
   }
-  g.fillStyle = 'rgba(8, 9, 12, 0.09)';
-  for (let i = 0; i < 14000; i++) {
-    const x = Math.random() * W, y = Math.random() * H, r = 1 + Math.random() * 2.4;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(8, 9, 12, 0.12)';
+  for (let i = 0; i < 3000; i++) {
+    g.fillRect(Math.random() * W, Math.random() * H, 2, 3);
+  }
   }
 
   const px = l => Math.round(((l + ROAD_HALF) / (ROAD_HALF * 2)) * W);
@@ -435,28 +434,51 @@ function showBootError(error) {
 
 function bootGame() {
   try {
-    setLoading('Generating the 3D realistic highway…', 18);
+    setLoading('Generating the 3D realistic highway…', 25);
     grassTex = makeFallbackGrassTexture();
     aoTex = makeFallbackShadowTexture();
     loadFerrariModel(); // Start loading realistic car model right away
-    setLoading('Building realistic road and scenery…', 58);
+    setLoading('Building realistic road and scenery…', 70);
     buildWorld();
     setLoading('Race ready!', 100);
     loadOptionalAssets();
 
-    requestAnimationFrame(() => {
-      state = 'menu';
-      setTimeout(() => {
-        loadingScreen.classList.add('hidden');
-        document.getElementById('menu').classList.remove('hidden');
-      }, 180);
-    });
+    // Transition to main menu immediately
+    state = 'menu';
+    loadingScreen.classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+    buildWorld();
+    setLoading('Race ready!', 100);
+    loadOptionalAssets();
+
   } catch (error) {
     showBootError(error);
   }
 }
 
-Promise.resolve().then(bootGame);
+// Click anywhere on loading screen to jump straight to menu
+loadingScreen.addEventListener('click', () => {
+  if (state === 'loading') {
+    state = 'menu';
+    loadingScreen.classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+  }
+});
+
+// Fail-safe: ensure loading screen is hidden within 1.2 seconds no matter what
+setTimeout(() => {
+  if (state === 'loading') {
+    state = 'menu';
+    loadingScreen.classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+  }
+}, 1200);
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootGame);
+} else {
+  bootGame();
+}
 
 // =====================================================================
 //  MATERIALS

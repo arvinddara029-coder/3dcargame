@@ -93,9 +93,8 @@
 </div>
 
 <div id="flash"></div>
-<!-- CrazyGames SDK (used for ads only). Loaded once, before the game code.
-     The game boots and runs normally even when this script is blocked. -->
-<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
-<script type="module" src="js/game.js?v=ultra_v2"></script>
+<!-- CrazyGames SDK (used for ads only). Loaded asynchronously so it never blocks page boot. -->
+<script async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+<script type="module" src="js/game.js?v=ultra_v3"></script>
 </body>
 </html>
