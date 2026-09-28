@@ -585,6 +585,22 @@ function buildChunk(idx) {
       const m = new THREE.Mesh(g, railMat); m.castShadow = true; group.add(m);
     }
     posts.castShadow = true; group.add(posts);
+    // centre median: low concrete wall between the carriageways. Crossing it
+    // is allowed but the car rumbles, sparks and takes light damage.
+    const wallMat = new THREE.MeshStandardMaterial({ color: '#b9bdc2', roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide });
+    const wp = [], wi = [];
+    for (let r = 0; r < rows; r++) {
+      const z = z0 + r * SEG, cx = roadX(z), y = roadY(z) + 0.02;
+      // LB, LT, RB, RT, TL, TR — two vertical faces + a top cap
+      wp.push(cx - 0.38, y + 0.10, z, cx - 0.38, y + 0.55, z, cx + 0.38, y + 0.10, z, cx + 0.38, y + 0.55, z, cx - 0.38, y + 0.55, z, cx + 0.38, y + 0.55, z);
+      if (r) { const a = (r - 1) * 6, b = r * 6;
+        wi.push(a, a + 1, b, a + 1, b + 1, b, a + 2, a + 3, b + 2, a + 3, b + 3, b + 2, a + 4, a + 5, b + 4, a + 5, b + 5, b + 4); }
+    }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+    wg.setIndex(wi); wg.computeVertexNormals();
+    const wall = new THREE.Mesh(wg, wallMat); wall.castShadow = true; wall.receiveShadow = true;
+    group.add(wall);
   }
   scene.add(group);
   return group;
@@ -976,6 +992,15 @@ function updatePlayer(dt) {
       shake = Math.max(shake, 0.15);
     }
   }
+  // centre-median rumble: grinding the concrete divider hurts a little
+  // (p.scrape was reset earlier; rail scrape above must not be wiped)
+  if (Math.abs(p.lat) < 0.62 && Math.abs(p.v) > 4) {
+    shake = Math.max(shake, 0.06);
+    p.scrape = 0.35;
+    p.v *= Math.pow(0.985, dt);
+    damage(dt * 1.5, false);
+    if (Math.random() < dt * 22) emit(p.x, roadY(p.z) + 0.25, p.z + 0.5, (Math.random() - 0.5) * 3, Math.random() * 3, p.v * 0.4, 0.3, 0.25, 1, 0.8, 0.3);
+  }
   S.wrongWay = Math.abs(rel) > Math.PI / 2 && p.v > 3;
 
   // gear / rpm
@@ -1205,7 +1230,7 @@ function beginRace() {
   updateCamera(0.016, true);
   ['menu', 'over', 'pause'].forEach(s => el(s).classList.add('hidden'));
   el('hud').classList.remove('hidden');
-  if (matchMedia('(pointer: coarse)').matches) el('touch').classList.remove('hidden');
+  if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0) el('touch').classList.remove('hidden');
   state = 'play';
   S.runEnded = false;
   ads.gameplayStart();
@@ -1299,6 +1324,10 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (state === 'play') togglePause(); });
 document.querySelectorAll('#touch button').forEach(b => {
   const k = b.dataset.k;
+  if (k === 'cam') { // one-shot: cycle camera views
+    b.addEventListener('touchstart', e => { e.preventDefault(); camMode = (camMode + 1) % CAM_NAMES.length; popup('CAM: ' + CAM_NAMES[camMode], '#8fe3ff'); }, { passive: false });
+    return;
+  }
   const set = v => e => { e.preventDefault(); keys[k] = v; };
   b.addEventListener('touchstart', set(true), { passive: false });
   b.addEventListener('touchend', set(false), { passive: false });

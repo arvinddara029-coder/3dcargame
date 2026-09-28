@@ -6,14 +6,14 @@ Endless 3D highway racing game (Three.js, browser me chalta hai).
 - Unlimited procedurally generated curvy + hilly highway (superwide 8-lane road, 4 lanes each way, guard rails, street lamps, trees, mountains, sunset sky)
 - Fast-start lightweight 3D supercar (paint colour choose karo), with shared geometry so traffic stays smooth
 - Oncoming traffic (left lanes) + same-direction traffic, trucks & buses, lane changes, AI braking
-- Challenges: roadworks barriers + cones, near-miss bonus, score multiplier, health/damage, wrong-way warning
+- Challenges: roadworks barriers + cones, near-miss bonus, score multiplier, health/damage, wrong-way warning, centre-median rumble (grinding the concrete divider costs health)
 - Landmarks: spinning wind turbines on the hills + glowing gantry arches with blinking lamps
 - Rewarded ad revive: watch a short ad after crashing for 1 extra life (once per run)
 - Boost pads painted on the tarmac: drive over for instant nitro + a speed kick
 - Nitro boost, handbrake drift, tyre smoke, sparks, crash physics, camera shake, 6 camera views (chase, long shot, hood, cinematic, sky cam, rear view)
 - Sound: RPM-based V8 engine with gear shifts, tyre screech, wind, guard-rail scrape, nitro, horn, other cars honking, crash, whoosh, background music
 - HUD: speedometer/tachometer, gear, minimap, health & nitro bars, best score saved
-- 3 difficulties, touch controls for mobile
+- 3 difficulties, touch controls for mobile (gas/brake/nitro/steer + camera & horn buttons)
 - Fail-safe startup: procedural road/car assets launch immediately; grass, HDR lighting and music enhance the race in the background when available
 - CrazyGames SDK integration (ads only): interstitials between completed runs + optional rewarded "second chance" revive
 
