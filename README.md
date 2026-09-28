@@ -3,10 +3,12 @@
 Endless 3D highway racing game (Three.js, browser me chalta hai).
 
 ## Features
-- Unlimited procedurally generated curvy + hilly highway (4 lanes, guard rails, street lamps, trees, mountains, sunset sky)
+- Unlimited procedurally generated curvy + hilly highway (wide 6-lane road, 3 lanes each way, guard rails, street lamps, trees, mountains, sunset sky)
 - Fast-start lightweight 3D supercar (paint colour choose karo), with shared geometry so traffic stays smooth
 - Oncoming traffic (left lanes) + same-direction traffic, trucks & buses, lane changes, AI braking
 - Challenges: roadworks barriers + cones, near-miss bonus, score multiplier, health/damage, wrong-way warning
+- Landmarks: spinning wind turbines on the hills + glowing gantry arches with blinking lamps
+- Boost pads painted on the tarmac: drive over for instant nitro + a speed kick
 - Nitro boost, handbrake drift, tyre smoke, sparks, crash physics, camera shake, 3 camera views
 - Sound: RPM-based V8 engine with gear shifts, tyre screech, wind, guard-rail scrape, nitro, horn, other cars honking, crash, whoosh, background music
 - HUD: speedometer/tachometer, gear, minimap, health & nitro bars, best score saved

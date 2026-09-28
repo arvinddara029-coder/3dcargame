@@ -6,10 +6,10 @@ import { ads } from './ads.js';
 // =====================================================================
 //  CONSTANTS / ROAD MATH
 // =====================================================================
-const ROAD_HALF = 9;            // total half width (incl. shoulder)
-const RAIL = 9.6;               // guard rail lateral offset
-const DRIVE_LIMIT = 8.5;        // car centre can't pass this
-const LANES = [-6, -2, 2, 6];   // left two = oncoming, right two = same direction
+const ROAD_HALF = 11;           // total half width (incl. shoulder) — wide 6-lane highway
+const RAIL = 11.6;              // guard rail lateral offset
+const DRIVE_LIMIT = 10.5;       // car centre can't pass this
+const LANES = [-9, -5.4, -1.8, 1.8, 5.4, 9]; // 3 oncoming (-), 3 same-direction (+); oncoming appears on the right of the screen (chase camera looks down +z)
 const CHUNK = 200, SEG = 4;
 const KMH = 3.6;
 
@@ -20,17 +20,17 @@ const roadDY = z => 10 * 0.0017 * Math.cos(z * 0.0017) + 5 * 0.0049 * Math.cos(z
 const terrainY = (x, z) => {
   const off = Math.abs(x - roadX(z));
   const base = roadY(z) - 0.08;
-  if (off < 13) return base;
-  const t = Math.min(1, (off - 13) / 90);
+  if (off < 15) return base;
+  const t = Math.min(1, (off - 15) / 90);
   const hills = (Math.sin(x * 0.021) * Math.cos(z * 0.017) + 0.6 * Math.sin(x * 0.051 + z * 0.037) + 0.8) * 9;
   const far = off > 160 ? (off - 160) * 0.25 : 0;
-  return base - 0.6 * Math.min(1, (off - 13) / 8) + t * hills + far;
+  return base - 0.6 * Math.min(1, (off - 15) / 8) + t * hills + far;
 };
 
 const DIFF = [
-  { name: 'EASY', traffic: 10, oncomingSpd: [14, 20], sameSpd: [12, 18], work: 0.4, ramp: 0.5 },
-  { name: 'NORMAL', traffic: 16, oncomingSpd: [18, 27], sameSpd: [14, 24], work: 0.7, ramp: 1 },
-  { name: 'INSANE', traffic: 26, oncomingSpd: [24, 34], sameSpd: [18, 28], work: 1, ramp: 1.6 },
+  { name: 'EASY', traffic: 12, oncomingSpd: [14, 20], sameSpd: [12, 18], work: 0.4, ramp: 0.5 },
+  { name: 'NORMAL', traffic: 19, oncomingSpd: [18, 27], sameSpd: [14, 24], work: 0.7, ramp: 1 },
+  { name: 'INSANE', traffic: 30, oncomingSpd: [24, 34], sameSpd: [18, 28], work: 1, ramp: 1.6 },
 ];
 const CAR_COLORS = ['#c50000', '#ffb300', '#0055ff', '#111111', '#f4f4f4', '#00b36b', '#ff4fd8'];
 
@@ -110,15 +110,16 @@ function roadTexture() {
   }
   g.putImageData(img, 0, 0);
   const px = l => ((l + ROAD_HALF) / (ROAD_HALF * 2)) * 512;
-  // shoulders slightly lighter
-  g.fillStyle = 'rgba(120,120,120,0.25)'; g.fillRect(0, 0, px(-8), 512); g.fillRect(px(8), 0, 512 - px(8), 512);
+  // shoulders slightly lighter (outermost metre on each side)
+  const shoulder = ROAD_HALF - 1;
+  g.fillStyle = 'rgba(120,120,120,0.25)'; g.fillRect(0, 0, px(-shoulder), 512); g.fillRect(px(shoulder), 0, 512 - px(shoulder), 512);
   // tyre wear darker in lanes
   g.fillStyle = 'rgba(0,0,0,0.12)';
   for (const l of LANES) { g.fillRect(px(l - 1.1), 0, 14, 512); g.fillRect(px(l + 0.8), 0, 14, 512); }
   // edge lines
-  g.fillStyle = '#f0f0f0'; g.fillRect(px(-8) - 4, 0, 8, 512); g.fillRect(px(8) - 4, 0, 8, 512);
-  // lane dashes
-  for (const l of [-4, 4]) g.fillRect(px(l) - 3, 0, 6, 220);
+  g.fillStyle = '#f0f0f0'; g.fillRect(px(-shoulder) - 4, 0, 8, 512); g.fillRect(px(shoulder) - 4, 0, 8, 512);
+  // lane dashes (between lanes of each carriageway)
+  for (const l of [-7.2, -3.6, 3.6, 7.2]) g.fillRect(px(l) - 3, 0, 6, 220);
   // double yellow centre
   g.fillStyle = '#f5c518'; g.fillRect(px(-0.18) - 3, 0, 6, 512); g.fillRect(px(0.18) - 3, 0, 6, 512);
   const t = new THREE.CanvasTexture(c);
@@ -422,6 +423,7 @@ function makeTruck() {
 // =====================================================================
 const chunks = new Map();
 let treeTrunks, treeTops, treeData = [], lampMesh, lampData = [], mountains;
+const turbineList = [], archList = []; // recycled roadside landmarks
 
 function buildWorld() {
   roadMat = new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.85, metalness: 0.0 });
@@ -450,6 +452,53 @@ function buildWorld() {
   lampMesh.castShadow = true;
   for (let i = 0; i < LAMPS; i++) lampData.push({ z: -1e9 });
   scene.add(lampMesh);
+
+  // Wind turbines on the hills (animated, recycled) — living skyline
+  const TURBINES = 6;
+  const tbMat = new THREE.MeshStandardMaterial({ color: '#e8eaec', roughness: 0.5, metalness: 0.25 });
+  for (let i = 0; i < TURBINES; i++) {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, 26, 8), tbMat);
+    pole.position.y = 13; pole.castShadow = true; g.add(pole);
+    const nac = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.4, 3.4), tbMat);
+    nac.position.set(0, 26, 0); nac.castShadow = true; g.add(nac);
+    const rotor = new THREE.Group();
+    rotor.position.set(0, 26, 1.9);
+    for (let b = 0; b < 3; b++) {
+      const holder = new THREE.Group();
+      holder.rotation.z = (b / 3) * Math.PI * 2;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.6, 11, 0.18), tbMat);
+      blade.position.y = 5.5; blade.castShadow = true;
+      holder.add(blade); rotor.add(holder);
+    }
+    g.add(rotor);
+    scene.add(g);
+    turbineList.push({ z: -1e9, group: g, rotor, spin: 0.7 + Math.random() * 0.9 });
+  }
+
+  // Highway gantry arches with a glowing strip + blinking lamps
+  const ARCHES = 4;
+  const aMat = new THREE.MeshStandardMaterial({ color: '#5d666d', metalness: 0.7, roughness: 0.4 });
+  for (let i = 0; i < ARCHES; i++) {
+    const g = new THREE.Group();
+    for (const s of [-1, 1]) {
+      const pil = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 0.8), aMat);
+      pil.position.set(s * (RAIL + 1.2), 4.5, 0); pil.castShadow = true; g.add(pil);
+    }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry((RAIL + 1.2) * 2 + 0.8, 1.1, 0.9), aMat);
+    beam.position.y = 9.2; beam.castShadow = true; g.add(beam);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry((RAIL + 1.2) * 2, 0.34, 0.12),
+      new THREE.MeshBasicMaterial({ color: '#27e6a5' }));
+    strip.position.set(0, 8.5, 0.52); g.add(strip);
+    const lamps = [];
+    for (const s of [-1, 1]) {
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), new THREE.MeshBasicMaterial({ color: '#ffae00' }));
+      lamp.position.set(s * 2.2, 8.45, 0.55); g.add(lamp); lamps.push(lamp);
+    }
+    g.userData.lamps = lamps;
+    scene.add(g);
+    archList.push({ z: -1e9, group: g });
+  }
 
   // Distant mountains (follow the camera horizontally)
   mountains = new THREE.Group();
@@ -501,13 +550,13 @@ function buildChunk(idx) {
   }
   // --- terrain
   {
-    const offs = [-600, -350, -220, -150, -100, -70, -45, -30, -20, -14, -9.2, 9.2, 14, 20, 30, 45, 70, 100, 150, 220, 350, 600];
+    const offs = [-600, -350, -220, -150, -100, -70, -45, -30, -20, -14, -11.2, 11.2, 14, 20, 30, 45, 70, 100, 150, 220, 350, 600];
     const pos = [], uv = [], ind = [], cols = offs.length;
     for (let r = 0; r < rows; r++) {
       const z = z0 + r * SEG, cx = roadX(z);
       for (let c = 0; c < cols; c++) {
         const x = cx + offs[c];
-        const y = Math.abs(offs[c]) < 9.5 ? roadY(z) - 0.05 : terrainY(x, z);
+        const y = Math.abs(offs[c]) < 11.5 ? roadY(z) - 0.05 : terrainY(x, z);
         pos.push(x, y, z); uv.push(x / 14, z / 14);
         if (r && c) { const a = (r - 1) * cols + c - 1, b = r * cols + c - 1; ind.push(a, b, a + 1, a + 1, b, b + 1); }
       }
@@ -572,6 +621,28 @@ function updateScenery(pz) {
       treeTops.instanceColor.needsUpdate = true;
     }
   }
+  // wind turbines
+  for (let i = 0; i < turbineList.length; i++) {
+    const t = turbineList[i];
+    if (t.z < pz - 130 || t.z > pz + 1000) {
+      t.z = (t.z < -1e8 ? pz - 100 + i * 180 : pz + 850 + Math.random() * 140);
+      const side = i % 2 ? 1 : -1;
+      const x = roadX(t.z) + side * (60 + Math.random() * 120);
+      const s = 0.85 + Math.random() * 0.6;
+      t.group.position.set(x, terrainY(x, t.z) - 0.3, t.z);
+      t.group.rotation.y = Math.random() * Math.PI * 2;
+      t.group.scale.set(s, s, s);
+    }
+  }
+  // gantry arches
+  for (let i = 0; i < archList.length; i++) {
+    const a = archList[i];
+    if (a.z < pz - 60 || a.z > pz + 1000) {
+      a.z = (a.z < -1e8 ? pz + 150 + i * 200 : pz + 880 + Math.random() * 120);
+      a.group.position.set(roadX(a.z), roadY(a.z), a.z);
+      a.group.rotation.y = Math.atan(roadDX(a.z));
+    }
+  }
   // lamps every 60m on alternating sides
   for (let i = 0; i < lampData.length; i++) {
     const l = lampData[i];
@@ -586,6 +657,12 @@ function updateScenery(pz) {
       lampMesh.setMatrixAt(i, _m); lampMesh.instanceMatrix.needsUpdate = true;
     }
   }
+}
+
+function animateLandmarks(dt) {
+  for (const t of turbineList) t.rotor.rotation.z += dt * t.spin;
+  const on = ((gameTime * 2) | 0) % 2 === 0;
+  for (const a of archList) for (const l of a.group.userData.lamps) l.visible = on;
 }
 
 // =====================================================================
@@ -645,7 +722,7 @@ function resetGame() {
   player = makeCar(playerColor, true);
   scene.add(player.root);
   Object.assign(player, { x: roadX(0) + 2, z: 0, heading: Math.atan(roadDX(0)), v: 0, steer: 0, gear: 1, rpm: 900, nitro: 100, health: 100, invuln: 0, skid: 0, scrape: 0, spin: 0, lat: 2 });
-  Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, over: false, overTimer: 0, runEnded: false, revived: false });
+  Object.assign(S, { score: 0, dist: 0, near: 0, top: 0, mult: 1, multTimer: 0, nextWork: 400, nextPickup: 300, nextPad: 700, over: false, overTimer: 0, runEnded: false, revived: false });
   gameTime = 0;
   shake = 0;
   treeData.forEach(t => t.z = -1e9); lampData.forEach(l => l.z = -1e9);
@@ -659,9 +736,9 @@ function spawnTraffic() {
   const want = Math.round(d.traffic * (1 + level));
   const active = traffic.filter(t => !t.dead).length;
   if (active >= want) return;
-  const laneIdx = (Math.random() * 4) | 0;
+  const laneIdx = (Math.random() * LANES.length) | 0;
   const lane = LANES[laneIdx];
-  const oncoming = laneIdx < 2;
+  const oncoming = laneIdx < 3;
   const z = player.z + 260 + Math.random() * 280;
   if (traffic.some(t => Math.abs(t.lane - lane) < 1 && Math.abs(t.z - z) < 35)) return;
   if (obstacles.some(o => Math.abs(o.lat - lane) < 2 && Math.abs(o.z - z) < 50)) return;
@@ -694,15 +771,20 @@ function updateTraffic(dt) {
         t.laneTimer -= dt;
         if (t.laneTimer < 0) {
           t.laneTimer = 4 + Math.random() * 8;
-          const nl = t.targetLane === 2 ? 6 : 2;
+          const dirLanes = LANES.filter(l => l > 0);
+          const li = dirLanes.indexOf(t.targetLane);
+          const cands = [dirLanes[li - 1], dirLanes[li + 1]].filter(l => l !== undefined);
+          const nl = cands.length ? cands[(Math.random() * cands.length) | 0] : t.targetLane;
           if (!traffic.some(o => o !== t && Math.abs(o.lane - nl) < 1.5 && Math.abs(o.z - t.z) < 20) &&
               !obstacles.some(o => Math.abs(o.lat - nl) < 2 && o.z - t.z > -10 && o.z - t.z < 60)) t.targetLane = nl;
         }
       }
       // avoid roadworks in own lane
       for (const o of obstacles) if (o.kind === 'barrier' && Math.abs(o.lat - t.targetLane) < 2 && (o.z - t.z) * dir > 0 && (o.z - t.z) * dir < 70) {
-        const alt = t.oncoming ? (t.targetLane === -6 ? -2 : -6) : (t.targetLane === 2 ? 6 : 2);
-        t.targetLane = alt;
+        const dirLanes = LANES.filter(l => (t.oncoming ? l < 0 : l > 0));
+        const li = dirLanes.indexOf(t.targetLane);
+        const cands = [dirLanes[li - 1], dirLanes[li + 1]].filter(l => l !== undefined && Math.abs(l - o.lat) > 2.2);
+        if (cands.length) t.targetLane = cands[(Math.random() * cands.length) | 0];
       }
       t.lane += THREE.MathUtils.clamp(t.targetLane - t.lane, -2.2 * dt, 2.2 * dt);
       t.speed += THREE.MathUtils.clamp(desired - t.speed, -12 * dt, 5 * dt);
@@ -739,6 +821,29 @@ function getBarrierAssets() {
   };
   return barrierAssets;
 }
+// Boost pad: bright chevrons painted on the lane — drive over for free nitro + a speed kick.
+const padTexture = (() => {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 160;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(10,36,22,0.88)'; g.fillRect(0, 0, 128, 160);
+  g.strokeStyle = '#37e08c'; g.lineWidth = 6; g.strokeRect(4, 4, 120, 152);
+  g.fillStyle = '#ffd23f';
+  for (let i = 0; i < 3; i++) {
+    const y = 34 + i * 46;
+    g.beginPath(); g.moveTo(64, y + 22); g.lineTo(26, y - 12); g.lineTo(102, y - 12); g.closePath(); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+const padGeo = new THREE.PlaneGeometry(3.4, 4.6);
+const padMat = new THREE.MeshBasicMaterial({ map: padTexture, transparent: true, opacity: 0.95, depthWrite: false });
+function spawnBoostPad(z) {
+  const m = new THREE.Mesh(padGeo, padMat);
+  m.rotation.x = -Math.PI / 2; m.renderOrder = 1;
+  scene.add(m);
+  pickups.push({ mesh: m, z, lat: LANES[(Math.random() * LANES.length) | 0], kind: 'boost', taken: false });
+}
+
 function barrierMesh() {
   const a = getBarrierAssets();
   const g = new THREE.Group();
@@ -750,7 +855,7 @@ function barrierMesh() {
   return g;
 }
 function spawnRoadworks(z) {
-  const lane = LANES[(Math.random() * 4) | 0];
+  const lane = LANES[(Math.random() * LANES.length) | 0];
   const len = 40 + Math.random() * 40;
   // barriers at start + end, cones between
   for (const dz of [0, len]) {
@@ -785,7 +890,7 @@ function spawnPickup(z) {
   g.add(new THREE.Mesh(nitro ? a.nitroGeo : a.repairGeo, nitro ? a.nitroMat : a.repairMat));
   g.add(new THREE.Mesh(a.ringGeo, nitro ? a.nitroRingMat : a.repairRingMat));
   scene.add(g);
-  pickups.push({ mesh: g, z, lat: LANES[(Math.random() * 4) | 0], kind: nitro ? 'nitro' : 'repair', taken: false });
+  pickups.push({ mesh: g, z, lat: LANES[(Math.random() * LANES.length) | 0], kind: nitro ? 'nitro' : 'repair', taken: false });
 }
 
 function updateObstacles(dt) {
@@ -800,8 +905,13 @@ function updateObstacles(dt) {
   }
   for (let i = obstacles.length - 1; i >= 0; i--) if (obstacles[i].z < player.z - 50) { scene.remove(obstacles[i].mesh); obstacles.splice(i, 1); }
   for (const p of pickups) {
-    p.mesh.position.set(roadX(p.z) + p.lat, roadY(p.z) + 1 + Math.sin(gameTime * 3 + p.z) * 0.2, p.z);
-    p.mesh.rotation.y += dt * 2;
+    if (p.kind === 'boost') {
+      // pads sit flat on the tarmac
+      p.mesh.position.set(roadX(p.z) + p.lat, roadY(p.z) + 0.05, p.z);
+    } else {
+      p.mesh.position.set(roadX(p.z) + p.lat, roadY(p.z) + 1 + Math.sin(gameTime * 3 + p.z) * 0.2, p.z);
+      p.mesh.rotation.y += dt * 2;
+    }
   }
   for (let i = pickups.length - 1; i >= 0; i--) if (pickups[i].taken || pickups[i].z < player.z - 30) { scene.remove(pickups[i].mesh); pickups.splice(i, 1); }
 }
@@ -964,7 +1074,13 @@ function collisions() {
     if (!k.taken && Math.abs(k.z - p.z) < 2.6 && Math.abs(k.lat - p.lat) < 1.8) {
       k.taken = true;
       if (k.kind === 'nitro') { p.nitro = Math.min(100, p.nitro + 40); popup('+NITRO', '#00e5ff'); audio.pickup(); }
-      else { p.health = Math.min(100, p.health + 30); popup('+REPAIR', '#3bff7a'); audio.pickup([520, 780, 1040]); }
+      else if (k.kind === 'repair') { p.health = Math.min(100, p.health + 30); popup('+REPAIR', '#3bff7a'); audio.pickup([520, 780, 1040]); }
+      else { // boost pad: instant nitro top-up + speed kick
+        p.nitro = Math.min(100, p.nitro + 30);
+        p.v = Math.min(p.v + 6, 96);
+        shake = Math.max(shake, 0.25);
+        popup('BOOST PAD!', '#ffd23f'); audio.pickup([392, 523, 784]);
+      }
     }
   }
 }
@@ -1046,13 +1162,13 @@ function drawHUD() {
   const sc = 0.45, ox = 90, oy = 200;
   const tx = (x, z) => [ox + (x - p.x) * sc * -1, oy - (z - p.z) * sc];
   m.lineCap = 'round';
-  m.strokeStyle = '#555'; m.lineWidth = 18 * sc + 4; m.beginPath();
+  m.strokeStyle = '#555'; m.lineWidth = 24 * sc + 4; m.beginPath();
   for (let z = p.z - 60; z < p.z + 430; z += 10) { const [a, b] = tx(roadX(z), z); z === p.z - 60 ? m.moveTo(a, b) : m.lineTo(a, b); }
   m.stroke();
   m.strokeStyle = '#f5c518'; m.lineWidth = 1; m.stroke();
   for (const t of traffic) { const [a, b] = tx(roadX(t.z) + t.lane, t.z); if (b < 0 || b > 240) continue; m.fillStyle = t.oncoming ? '#ff4040' : '#40a0ff'; m.fillRect(a - 2, b - (t.truck ? 5 : 3), 4, t.truck ? 10 : 6); }
   for (const o of obstacles) if (o.kind === 'barrier') { const [a, b] = tx(roadX(o.z) + o.lat, o.z); m.fillStyle = '#ff8c00'; m.fillRect(a - 3, b - 1, 6, 2); }
-  for (const k of pickups) { const [a, b] = tx(roadX(k.z) + k.lat, k.z); m.fillStyle = k.kind === 'nitro' ? '#00e5ff' : '#3bff7a'; m.beginPath(); m.arc(a, b, 2.5, 0, 7); m.fill(); }
+  for (const k of pickups) { const [a, b] = tx(roadX(k.z) + k.lat, k.z); m.fillStyle = k.kind === 'nitro' ? '#00e5ff' : k.kind === 'boost' ? '#ffd23f' : '#3bff7a'; m.beginPath(); m.arc(a, b, 2.5, 0, 7); m.fill(); }
   m.fillStyle = '#fff'; m.beginPath(); m.moveTo(90, 194); m.lineTo(86, 204); m.lineTo(94, 204); m.fill();
 }
 
@@ -1197,9 +1313,11 @@ function loop() {
     spawnTraffic();
     if (player.z > S.nextWork) { spawnRoadworks(player.z + 350); S.nextWork = player.z + (600 + Math.random() * 900) / DIFF[difficulty].work; }
     if (player.z > S.nextPickup) { spawnPickup(player.z + 300); S.nextPickup = player.z + 350 + Math.random() * 500; }
+    if (player.z > S.nextPad) { spawnBoostPad(player.z + 250); S.nextPad = player.z + 450 + Math.random() * 650; }
     updateTraffic(dt); updateObstacles(dt);
     if (!S.over) collisions();
     updateChunks(player.z); updateScenery(player.z);
+    animateLandmarks(dt);
     updateParticles(dt);
     // scoring
     if (!S.over && player.v > 0) {
@@ -1218,6 +1336,7 @@ function loop() {
     // showroom orbit
     if (!player) resetGame();
     menuT += dt;
+    animateLandmarks(dt);
     updateParticles(dt);
     const r = 7.5, y = roadY(player.z);
     camera.position.set(player.x + Math.sin(menuT * 0.3) * r, y + 2.2, player.z + Math.cos(menuT * 0.3) * r);
