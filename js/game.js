@@ -6,10 +6,10 @@ import { ads } from './ads.js';
 // =====================================================================
 //  CONSTANTS / ROAD MATH
 // =====================================================================
-const ROAD_HALF = 11;           // total half width (incl. shoulder) — wide 6-lane highway
-const RAIL = 11.6;              // guard rail lateral offset
-const DRIVE_LIMIT = 10.5;       // car centre can't pass this
-const LANES = [-9, -5.4, -1.8, 1.8, 5.4, 9]; // 3 oncoming (-), 3 same-direction (+); oncoming appears on the right of the screen (chase camera looks down +z)
+const ROAD_HALF = 13;           // total half width (incl. shoulder) — superwide 8-lane highway
+const RAIL = 13.6;              // guard rail lateral offset
+const DRIVE_LIMIT = 12.5;       // car centre can't pass this
+const LANES = [-10.5, -7.5, -4.5, -1.5, 1.5, 4.5, 7.5, 10.5]; // 4 oncoming (-), 4 same-direction (+); oncoming appears on the right of the screen (chase camera looks down +z)
 const CHUNK = 200, SEG = 4;
 const KMH = 3.6;
 
@@ -20,17 +20,17 @@ const roadDY = z => 10 * 0.0017 * Math.cos(z * 0.0017) + 5 * 0.0049 * Math.cos(z
 const terrainY = (x, z) => {
   const off = Math.abs(x - roadX(z));
   const base = roadY(z) - 0.08;
-  if (off < 15) return base;
-  const t = Math.min(1, (off - 15) / 90);
+  if (off < 17) return base;
+  const t = Math.min(1, (off - 17) / 90);
   const hills = (Math.sin(x * 0.021) * Math.cos(z * 0.017) + 0.6 * Math.sin(x * 0.051 + z * 0.037) + 0.8) * 9;
   const far = off > 160 ? (off - 160) * 0.25 : 0;
-  return base - 0.6 * Math.min(1, (off - 15) / 8) + t * hills + far;
+  return base - 0.6 * Math.min(1, (off - 17) / 8) + t * hills + far;
 };
 
 const DIFF = [
-  { name: 'EASY', traffic: 12, oncomingSpd: [14, 20], sameSpd: [12, 18], work: 0.4, ramp: 0.5 },
-  { name: 'NORMAL', traffic: 19, oncomingSpd: [18, 27], sameSpd: [14, 24], work: 0.7, ramp: 1 },
-  { name: 'INSANE', traffic: 30, oncomingSpd: [24, 34], sameSpd: [18, 28], work: 1, ramp: 1.6 },
+  { name: 'EASY', traffic: 14, oncomingSpd: [14, 20], sameSpd: [12, 18], work: 0.4, ramp: 0.5 },
+  { name: 'NORMAL', traffic: 22, oncomingSpd: [18, 27], sameSpd: [14, 24], work: 0.7, ramp: 1 },
+  { name: 'INSANE', traffic: 34, oncomingSpd: [24, 34], sameSpd: [18, 28], work: 1, ramp: 1.6 },
 ];
 const CAR_COLORS = ['#c50000', '#ffb300', '#0055ff', '#111111', '#f4f4f4', '#00b36b', '#ff4fd8'];
 
@@ -119,7 +119,7 @@ function roadTexture() {
   // edge lines
   g.fillStyle = '#f0f0f0'; g.fillRect(px(-shoulder) - 4, 0, 8, 512); g.fillRect(px(shoulder) - 4, 0, 8, 512);
   // lane dashes (between lanes of each carriageway)
-  for (const l of [-7.2, -3.6, 3.6, 7.2]) g.fillRect(px(l) - 3, 0, 6, 220);
+  for (const l of [-9, -6, -3, 3, 6, 9]) g.fillRect(px(l) - 3, 0, 6, 220);
   // double yellow centre
   g.fillStyle = '#f5c518'; g.fillRect(px(-0.18) - 3, 0, 6, 512); g.fillRect(px(0.18) - 3, 0, 6, 512);
   const t = new THREE.CanvasTexture(c);
@@ -550,13 +550,13 @@ function buildChunk(idx) {
   }
   // --- terrain
   {
-    const offs = [-600, -350, -220, -150, -100, -70, -45, -30, -20, -14, -11.2, 11.2, 14, 20, 30, 45, 70, 100, 150, 220, 350, 600];
+    const offs = [-600, -350, -220, -150, -100, -70, -45, -30, -20, -14, -13.2, 13.2, 14, 20, 30, 45, 70, 100, 150, 220, 350, 600];
     const pos = [], uv = [], ind = [], cols = offs.length;
     for (let r = 0; r < rows; r++) {
       const z = z0 + r * SEG, cx = roadX(z);
       for (let c = 0; c < cols; c++) {
         const x = cx + offs[c];
-        const y = Math.abs(offs[c]) < 11.5 ? roadY(z) - 0.05 : terrainY(x, z);
+        const y = Math.abs(offs[c]) < 13.5 ? roadY(z) - 0.05 : terrainY(x, z);
         pos.push(x, y, z); uv.push(x / 14, z / 14);
         if (r && c) { const a = (r - 1) * cols + c - 1, b = r * cols + c - 1; ind.push(a, b, a + 1, a + 1, b, b + 1); }
       }
@@ -738,7 +738,7 @@ function spawnTraffic() {
   if (active >= want) return;
   const laneIdx = (Math.random() * LANES.length) | 0;
   const lane = LANES[laneIdx];
-  const oncoming = laneIdx < 3;
+  const oncoming = laneIdx < LANES.length / 2;
   const z = player.z + 260 + Math.random() * 280;
   if (traffic.some(t => Math.abs(t.lane - lane) < 1 && Math.abs(t.z - z) < 35)) return;
   if (obstacles.some(o => Math.abs(o.lat - lane) < 2 && Math.abs(o.z - z) < 50)) return;
@@ -1096,6 +1096,7 @@ function popup(text, color) {
 //  CAMERA
 // =====================================================================
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const CAM_NAMES = ['CHASE', 'LONG SHOT', 'HOOD', 'CINEMATIC', 'SKY CAM', 'REAR VIEW'];
 function updateCamera(dt, snap = false) {
   const p = player, h = p.heading - p.spin * 0.1;
   const fwd = new THREE.Vector3(Math.sin(h), 0, Math.cos(h));
@@ -1103,9 +1104,22 @@ function updateCamera(dt, snap = false) {
   let tp, tl;
   if (camMode === 0) { tp = new THREE.Vector3(p.x, y + 2.6, p.z).addScaledVector(fwd, -6.8); tl = new THREE.Vector3(p.x, y + 1.1, p.z).addScaledVector(fwd, 6); }
   else if (camMode === 1) { tp = new THREE.Vector3(p.x, y + 4.5, p.z).addScaledVector(fwd, -11); tl = new THREE.Vector3(p.x, y + 1, p.z).addScaledVector(fwd, 10); }
-  else { tp = new THREE.Vector3(p.x, y + 1.1, p.z).addScaledVector(fwd, 0.2); tl = new THREE.Vector3(p.x, y + 1.0, p.z).addScaledVector(fwd, 20); }
+  else if (camMode === 2) { tp = new THREE.Vector3(p.x, y + 1.1, p.z).addScaledVector(fwd, 0.2); tl = new THREE.Vector3(p.x, y + 1.0, p.z).addScaledVector(fwd, 20); }
+  else if (camMode === 3) { // cinematic: low, off-axis action angle
+    const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
+    tp = new THREE.Vector3(p.x, y + 0.7, p.z).addScaledVector(fwd, 4.5).addScaledVector(side, 5.2);
+    tl = new THREE.Vector3(p.x, y + 0.9, p.z).addScaledVector(fwd, 2);
+  }
+  else if (camMode === 4) { // sky cam: helicopter-style top-down
+    tp = new THREE.Vector3(p.x, y + 42, p.z - 7);
+    tl = new THREE.Vector3(p.x, y, p.z + 3);
+  }
+  else { // rear view: look back past the car (great for near misses)
+    tp = new THREE.Vector3(p.x, y + 1.7, p.z).addScaledVector(fwd, 5.5);
+    tl = new THREE.Vector3(p.x, y + 1.0, p.z).addScaledVector(fwd, -30);
+  }
   if (tp.y < terrainY(tp.x, tp.z) + 0.5) tp.y = terrainY(tp.x, tp.z) + 0.5;
-  const k = snap ? 1 : Math.min(1, dt * (camMode === 2 ? 30 : 7));
+  const k = snap ? 1 : Math.min(1, dt * (camMode === 2 ? 30 : camMode >= 4 ? 14 : 7));
   camPos.lerp(tp, k); camLook.lerp(tl, snap ? 1 : Math.min(1, dt * 12));
   camera.position.copy(camPos);
   if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.4; camera.position.y += (Math.random() - 0.5) * shake * 0.3; shake = Math.max(0, shake - dt * 2.5); }
@@ -1162,7 +1176,7 @@ function drawHUD() {
   const sc = 0.45, ox = 90, oy = 200;
   const tx = (x, z) => [ox + (x - p.x) * sc * -1, oy - (z - p.z) * sc];
   m.lineCap = 'round';
-  m.strokeStyle = '#555'; m.lineWidth = 24 * sc + 4; m.beginPath();
+  m.strokeStyle = '#555'; m.lineWidth = 30 * sc + 4; m.beginPath();
   for (let z = p.z - 60; z < p.z + 430; z += 10) { const [a, b] = tx(roadX(z), z); z === p.z - 60 ? m.moveTo(a, b) : m.lineTo(a, b); }
   m.stroke();
   m.strokeStyle = '#f5c518'; m.lineWidth = 1; m.stroke();
@@ -1276,7 +1290,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return; // ignore OS key-repeat for one-shot actions below
-  if (e.code === 'KeyC') camMode = (camMode + 1) % 3;
+  if (e.code === 'KeyC') { camMode = (camMode + 1) % CAM_NAMES.length; popup('CAM: ' + CAM_NAMES[camMode], '#8fe3ff'); }
   if (e.code === 'KeyM') audio.toggleMusic();
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
   if (e.code === 'Enter' && (state === 'menu' || state === 'over')) startGame();
