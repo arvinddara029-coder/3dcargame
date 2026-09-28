@@ -5,10 +5,8 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GameAudio } from './audio.js';
 import { ads } from './ads.js';
 
-// =====================================================================
-//  CONSTANTS / ROAD MATH
-// =====================================================================
-const ROAD_HALF = 13;           // total half width (incl. shoulder) — superwide 8-lane highway
+// ==============================================================//  CONSTANTS / ROAD MATH
+// ==============================================================const ROAD_HALF = 13;           // total half width (incl. shoulder) — superwide 8-lane highway
 const RAIL = 13.8;              // guard rail lateral offset
 const DRIVE_LIMIT = 12.5;       // car centre can't pass this
 const LANES = [-10.5, -7.5, -4.5, -1.5, 1.5, 4.5, 7.5, 10.5]; // 4 oncoming (-), 4 same-direction (+); oncoming appears on the right of the screen (chase camera looks down +z)
@@ -36,10 +34,8 @@ const DIFF = [
 ];
 const CAR_COLORS = ['#c50000', '#ffb300', '#0055ff', '#111111', '#f4f4f4', '#00b36b', '#ff4fd8'];
 
-// =====================================================================
-//  RENDERER / SCENE
-// =====================================================================
-const container = document.getElementById('game');
+// ==============================================================//  RENDERER / SCENE
+// ==============================================================const container = document.getElementById('game');
 const LOW_POWER_DEVICE = Boolean(matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4));
 let renderer;
 try {
@@ -96,10 +92,8 @@ sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.bias = -0.0004;
 scene.add(sun, sun.target);
 
-// =====================================================================
-//  REALISTIC HIGH-RESOLUTION ROAD TEXTURES (Canvas-generated PBR maps)
-// =====================================================================
-function createRealisticRoadTextures() {
+// ==============================================================//  REALISTIC HIGH-RESOLUTION ROAD TEXTURES (Canvas-generated PBR maps)
+// ==============================================================function createRealisticRoadTextures() {
   const W = 1024, H = 2048;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
@@ -287,10 +281,8 @@ function createRealisticRoadTextures() {
 }
 }
 
-// =====================================================================
-//  FAST, FAIL-SAFE BOOT & ASSET LOADING
-// =====================================================================
-const loadFill = document.getElementById('loadfill');
+// ==============================================================//  FAST, FAIL-SAFE BOOT & ASSET LOADING
+// ==============================================================const loadFill = document.getElementById('loadfill');
 const loadText = document.getElementById('loadtxt');
 const loadingScreen = document.getElementById('loading');
 const loadingRetry = document.getElementById('loadingRetry');
@@ -447,10 +439,6 @@ function bootGame() {
     state = 'menu';
     loadingScreen.classList.add('hidden');
     document.getElementById('menu').classList.remove('hidden');
-    buildWorld();
-    setLoading('Race ready!', 100);
-    loadOptionalAssets();
-
   } catch (error) {
     showBootError(error);
   }
@@ -465,20 +453,7 @@ loadingScreen.addEventListener('click', () => {
   }
 });
 
-// Fail-safe: ensure loading screen is hidden within 1.2 seconds no matter what
-setTimeout(() => {
-  if (state === 'loading') {
-    state = 'menu';
-    loadingScreen.classList.add('hidden');
-    document.getElementById('menu').classList.remove('hidden');
-  }
-}, 1200);
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', bootGame);
-} else {
-  bootGame();
-}
+bootGame();
 
 // =====================================================================
 //  MATERIALS
@@ -981,10 +956,8 @@ function makeTruck() {
   return { root, wheels, brakeMat, halfL: 5.8, halfW: 1.35 };
 }
 
-// =====================================================================
-//  WORLD: road chunks, terrain, rails, scenery
-// =====================================================================
-const chunks = new Map();
+// ==============================================================//  WORLD: road chunks, terrain, rails, scenery
+// ==============================================================const chunks = new Map();
 let treeTrunks, treeTops, treeData = [], lampMesh, lampData = [], mountains;
 const turbineList = [], archList = []; // recycled roadside landmarks
 
@@ -1150,10 +1123,8 @@ function mergeGeos(geos) {
   return out;
 }
 
-// =====================================================================
-//  ROAD CHUNK BUILDER (Realistic 3D Curbs, Corrugated W-Rails, Jersey Barrier)
-// =====================================================================
-function buildChunk(idx) {
+// ==============================================================//  ROAD CHUNK BUILDER (Realistic 3D Curbs, Corrugated W-Rails, Jersey Barrier)
+// ==============================================================function buildChunk(idx) {
   const z0 = idx * CHUNK, rows = CHUNK / SEG + 1;
   const group = new THREE.Group();
 
@@ -1379,10 +1350,8 @@ function animateLandmarks(dt) {
   for (const a of archList) for (const l of a.group.userData.lamps) l.visible = on;
 }
 
-// =====================================================================
-//  PARTICLES
-// =====================================================================
-const MAX_P = 220;
+// ==============================================================//  PARTICLES
+// ==============================================================const MAX_P = 220;
 const pPos = new Float32Array(MAX_P * 3), pCol = new Float32Array(MAX_P * 3), pSize = new Float32Array(MAX_P);
 const pData = [];
 let pGeo, pMat, pMesh;
@@ -1420,10 +1389,8 @@ function updateParticles(dt) {
   pGeo.attributes.size.needsUpdate = true;
 }
 
-// =====================================================================
-//  GAME STATE & TRAFFIC
-// =====================================================================
-let state = 'loading'; // loading | menu | play | pause | over
+// ==============================================================//  GAME STATE & TRAFFIC
+// ==============================================================let state = 'loading'; // loading | menu | play | pause | over
 let difficulty = 1;
 let playerColor = CAR_COLORS[0];
 let player = null;
@@ -1632,10 +1599,8 @@ function updateObstacles(dt) {
   for (let i = pickups.length - 1; i >= 0; i--) if (pickups[i].taken || pickups[i].z < player.z - 30) { scene.remove(pickups[i].mesh); pickups.splice(i, 1); }
 }
 
-// =====================================================================
-//  PLAYER PHYSICS
-// =====================================================================
-const GEARS = [0, 16, 30, 44, 58, 72, 100];
+// ==============================================================//  PLAYER PHYSICS
+// ==============================================================const GEARS = [0, 16, 30, 44, 58, 72, 100];
 function updatePlayer(dt) {
   const p = player;
   const up = keys.ArrowUp || keys.KeyW || keys.gas, down = keys.ArrowDown || keys.KeyS || keys.brake;
@@ -1752,10 +1717,8 @@ function damage(amount, flash = true) {
   if (p.health <= 0 && !S.over) endGame();
 }
 
-// =====================================================================
-//  COLLISIONS & SCORING
-// =====================================================================
-function collisions() {
+// ==============================================================//  COLLISIONS & SCORING
+// ==============================================================function collisions() {
   const p = player;
   for (const t of traffic) {
     const dz = t.z - p.z, dl = t.lane - p.lat;
@@ -1824,10 +1787,8 @@ function popup(text, color) {
   document.getElementById('popups').appendChild(d); setTimeout(() => d.remove(), 1300);
 }
 
-// =====================================================================
-//  CAMERA (Featuring 1st-Person Cockpit Interior View)
-// =====================================================================
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+// ==============================================================//  CAMERA (Featuring 1st-Person Cockpit Interior View)
+// ==============================================================const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const CAM_NAMES = ['CHASE', 'COCKPIT', 'HOOD', 'LONG SHOT', 'CINEMATIC', 'SKY CAM', 'REAR VIEW'];
 function updateCamera(dt, snap = false) {
   const p = player, h = p.heading - p.spin * 0.1;
@@ -1897,10 +1858,8 @@ function updateCamera(dt, snap = false) {
   sun.target.position.set(p.x, y, p.z + 10);
 }
 
-// =====================================================================
-//  HUD
-// =====================================================================
-const el = id => document.getElementById(id);
+// ==============================================================//  HUD
+// ==============================================================const el = id => document.getElementById(id);
 const gauge = el('gauge').getContext('2d'), mini = el('minimap').getContext('2d');
 function drawHUD() {
   const p = player;
@@ -1945,10 +1904,8 @@ function drawHUD() {
   }
 }
 
-// =====================================================================
-//  GAME LOOP CONTROLS & MENUS
-// =====================================================================
-function startGame() {
+// ==============================================================//  GAME LOOP CONTROLS & MENUS
+// ==============================================================function startGame() {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   ads.maybeShowInterstitial(beginRace);
 }
@@ -2147,10 +2104,8 @@ document.addEventListener('click', e => {
   if (btn && btn.blur) btn.blur();
 });
 
-// =====================================================================
-//  MAIN LOOP
-// =====================================================================
-const clock = new THREE.Clock();
+// ==============================================================//  MAIN LOOP
+// ==============================================================const clock = new THREE.Clock();
 let menuT = 0;
 function loop() {
   requestAnimationFrame(loop);

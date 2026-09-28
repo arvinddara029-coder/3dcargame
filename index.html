@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>Highway Rush 3D — Endless Racing</title>
 <link rel="stylesheet" href="css/style.css" />
+<script>
+window.addEventListener('error', function(e) {
+  var el = document.getElementById('loadtxt');
+  if (el) el.textContent = 'Notice: ' + (e.message || 'Asset loading');
+});
+</script>
 <script type="importmap">
 { "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }
 </script>
@@ -56,7 +62,8 @@
   <h1>HIGHWAY RUSH 3D</h1>
   <div class="loadbar"><div id="loadfill"></div></div>
   <p id="loadtxt" role="status">Building your 3D highway…</p>
-  <p class="loadnote">Optional assets slow hon to bhi race turant start hogi.</p>
+  <p class="loadnote">Tap anywhere to enter race menu.</p>
+  <button id="skipLoading" style="margin-top:14px;background:#ffd23f;color:#000;font-size:15px;font-weight:900;padding:12px 28px;border-radius:12px;border:none;cursor:pointer;">CONTINUE TO MENU ➔</button>
   <button id="loadingRetry" class="hidden">RETRY 3D ENGINE</button>
 </div>
 
@@ -93,8 +100,25 @@
 </div>
 
 <div id="flash"></div>
-<!-- CrazyGames SDK (used for ads only). Loaded asynchronously so it never blocks page boot. -->
-<script async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
-<script type="module" src="js/game.js?v=ultra_v3"></script>
+
+<script>
+// Fail-safe: Tap or auto-timeout immediately transitions loading screen to menu
+(function() {
+  function dismissLoading() {
+    var l = document.getElementById('loading');
+    var m = document.getElementById('menu');
+    if (l && m && !l.classList.contains('hidden')) {
+      l.classList.add('hidden');
+      m.classList.remove('hidden');
+    }
+  }
+  var skip = document.getElementById('skipLoading');
+  if (skip) skip.onclick = function(e) { e.stopPropagation(); dismissLoading(); };
+  var load = document.getElementById('loading');
+  if (load) load.onclick = dismissLoading;
+  setTimeout(dismissLoading, 1200);
+})();
+</script>
+<script type="module" src="js/game.js?v=ultra_v4"></script>
 </body>
 </html>
